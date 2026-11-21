@@ -1,0 +1,9 @@
+# 학습 결과, 모델, 데이터는 넣지 않는다 (베이스 모델을 고른 기록 s1_pick.json만 넣는다)
+**/runs/*
+!code/EXP1/CODE/runs/s1_pick.json
+**/data/FashionMNIST/
+*.pt
+*.npz
+__pycache__/
+*.pyc
+code/RECIPE_VIZ.html
