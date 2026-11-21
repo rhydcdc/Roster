@@ -2,7 +2,7 @@
 
 레시피 페이지(`../index.html`)의 결과를 낸 코드를 그대로 추렸다. 폴더 구조도 연구할 때 그대로라 실험 흔적이 섞여 있다. 연구 때와 다른 곳은 경로 두 곳뿐이다: `AUTO/EXP1/CODE/auto.py`가 이 `code/` 폴더를 맨 위로 알아보게 했고, `EXP1/CODE/runs/s1_pick.json`의 베이스 모델 경로를 상대 경로로 바꿨다.
 
-필요한 것: Python 3.13, PyTorch 2.6 (CUDA), torchvision, numpy, scipy, Pillow. Fashion-MNIST는 처음 돌릴 때 torchvision이 받는다. 학습된 모델은 아직 넣지 않았다(나중에 공개).
+필요한 것: Python 3.13, PyTorch 2.6 (CUDA), torchvision, numpy, scipy, Pillow. Fashion-MNIST는 처음 돌릴 때 torchvision이 받는다.
 
 | 차례 | 폴더 | 명령 | 만드는 것 |
 |---|---|---|---|
