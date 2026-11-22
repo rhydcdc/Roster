@@ -6,7 +6,8 @@ FFN 가속 방법 (순수 bf16). RTX 4060 커널 실측 기준 단일 요청 5.3
 
 **설명 페이지: https://rhydcdc.github.io/Roster/**
 
-## Key Contributions
+<details>
+<summary><b>Key Contributions (English)</b></summary>
 
 | Contribution | Core Idea | Differentiation from Prior Work |
 | :--- | :--- | :--- |
@@ -15,7 +16,10 @@ FFN 가속 방법 (순수 bf16). RTX 4060 커널 실측 기준 단일 요청 5.3
 | **Router-Free Finite Input-Centroid Variable Rosters & Automatic Batch Coalescing** | Maps input hidden states via a single nearest-centroid lookup (`M = 256`) to overlapping, variable-length per-centroid neuron rosters (`K_j`), eliminating separate predictor/router networks and skipping `gate`, `up`, and `down` ahead of execution. Because the codebook is finite, tokens sharing a centroid automatically coalesce with zero accuracy change as batch size grows, compressing the tiling row space and enlarging dense tile blocks. | Avoids per-token uncoalesced MLP prediction (*Deja Vu*, *ShadowLLM*) and disjoint neuron-expert partitioning with learned routers (*MoEfication*). |
 | **Non-Grid Free Row–Column Multi-Scale Cost-Weighted Tile Covering (`Roster-Tile`)** | Breaks the 1D global row/column permutation bottleneck (RCM/BCSR) by exploiting column-independent SwiGLU stage-1 outputs (`atomicAdd = 0`) to pair arbitrary `(row_set, col_set)` subsets independently per tile. Tiles are selected by measured GPU execution cost across a 5-tier frame ladder (`64×32 → 32×32 → 32×16 → 16×16 → 8×16`), driving slow `8×16` tiles down to **0.2%** inside a single strip-ordered Tensor Core kernel. | Distinct from *PIT* (SOSP '23, dynamic micro-tile gathering) and *TileSpMM* (ICPP '26, static SpMM variable tiling) by targeting dynamic `1×1` neuron-level batched SwiGLU FFNs with don't-care `1*` bits and a silicon cost-weighted frame ladder. |
 
-## 핵심 기여 (한국어)
+</details>
+
+<details>
+<summary><b>핵심 기여 (한국어)</b></summary>
 
 | 핵심 기여 | 핵심 내용 | 선행 연구 대비 차별점 |
 | :--- | :--- | :--- |
@@ -23,3 +27,5 @@ FFN 가속 방법 (순수 bf16). RTX 4060 커널 실측 기준 단일 요청 5.3
 | **중심점별 앞쪽 몰기 학습 → ‘꺼도 되는 1(`1*`, Don't-Care)’ 타일 커버링 연동** | 중심점마다 다른 뉴런 순위로 앞쪽 몰기 학습 압력을 걸어 끝쪽 10% `1*` 자유도를 의도적으로 생성하고, 타일 솔버에서 **열린 타일 안은 공짜 ON · 새 타일을 여는 외딴 `1*`은 자동 OFF**로 처리해 베이스 정확도의 **99.59%**를 유지했다. | *MatFormer* (전역 정적 앞쪽 몰기만 사용), *PIT*·*TileSpMM* (모든 `1`이 고정 제약, Don't-Care 개념 없음)과 뚜렷하게 차별화 |
 | **라우터 없는 유한 입력 중심점 가변 명단(`Roster`) + 배치 자동 합승** | 별도 예측기·라우터 없이 입력 은닉 상태의 최근접 중심점(`M = 256`) 내적 1회만으로 겹침을 허용하는 가변 길이 명단(`K_j`)을 선제 확정해 `gate · up · down`을 모두 건너뛴다. 유한 코드북 구조 덕분에 배치가 커질수록 출력 손실 0%의 **같은 중심점 자동 합승**이 일어나 타일링 행 공간이 압축된다. | *Deja Vu*·*ShadowLLM* (토큰별 난잡한 MLP 예측 → 합승 불가), *MoEfication* (뉴런을 겹침 없는 전문가로 분할 + 학습 라우터 필요)과 구별 |
 | **SwiGLU 전용 비격자 자유 행·열 조합 + 실측 비용 5단계 타일 커버링 (`Roster-Tile`)** | 전역 1D 행·열 재배열(RCM·BCSR)의 한계를 깨고 SwiGLU 1단계의 열 독립성(`atomicAdd = 0`)을 활용해 타일마다 독립 `(R_t, C_t)`를 자유롭게 짝짓는다. GPU 실측 비용 사다리(`64×32 → 32×32 → 32×16 → 16×16 → 8×16`)로 커버링해 저속 `8×16` 비중을 **0.2%**까지 줄이고 단일 스트립 통합 커널로 실행한다. | *PIT* (SOSP '23, 동적 마이크로타일 Gather), *TileSpMM* (ICPP '26, 정적 SpMM 가변 타일) 대비 **동적 `1×1` 뉴런 단위 배치 FFN + `1*` 자유도 + 실측 비용 사다리**로 차별화 |
+
+</details>
