@@ -478,6 +478,9 @@ footer { color: var(--fg-3); font-size: 12.5px; padding-block: 36px 48px; border
   .bt-b1-card .hdr b { color: var(--fg); font-weight: 600; }
   .bt-strip-chips { display: flex; flex-wrap: wrap; gap: 5px; }
   .bt-strip-chips .chip.plain { padding: 3px 9px; font-size: 12px; font-family: var(--mono); }
+  .bt-chips-1row { display: flex; flex-wrap: nowrap; gap: 5px; width: 100%; }
+  .bt-chips-1row .chip.plain { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+  @media (max-width: 640px) { .bt-chips-1row { flex-wrap: wrap; } }
   .bt-prob ol { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--fg-2); font-size: 13px; }
   .bt-prob ul { margin: 4px 0 0; padding-left: 16px; display: grid; gap: 4px; color: var(--fg-3); font-size: 12.5px; }
   .bt-recipe { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 7px; color: var(--fg-2); font-size: 13px; }
@@ -733,8 +736,8 @@ footer { color: var(--fg-3); font-size: 12.5px; padding-block: 36px 48px; border
       <p class="note">오른쪽 칩을 차례로 눌러 같은 <span class="mono">6×12</span> 표 위에서 ① 기존 정적 몰기(MatFormer), ② 기존 SpMM(1D 재배열), ③ 중심점별 앞쪽 몰기(<span class="mono">1*</span>), ④ <span class="mono">1*</span> × 비격자 5단계 커버링을 같은 스케일로 비교해 보라.</p>
     </div>
     <div class="vis">
-      <div class="row" style="justify-content:space-between;gap:8px">
-        <div class="chips" id="ct-c1-btns"></div>
+      <div class="row" style="justify-content:space-between;gap:6px">
+        <div class="chips bt-chips-1row" id="ct-c1-btns"></div>
         <span class="lbl" id="ct-c1-cap"></span>
       </div>
       <div class="row" id="ct-c1-subrow" style="justify-content:space-between;gap:8px;display:none">
@@ -744,6 +747,7 @@ footer { color: var(--fg-3); font-size: 12.5px; padding-block: 36px 48px; border
       <div class="bt-svg" id="ct-c1-svg"></div>
       <div class="legend" id="ct-c1-leg"></div>
       <div class="bt-kpi" id="ct-c1-kpi"></div>
+      <div class="bt-tbl-wrap"><table class="bt-tbl" id="ct-c1-tbl"></table></div>
     </div>
   </section>
 
@@ -1804,7 +1808,7 @@ const C1_NG_TILES = [
 
 function drawC1() {
   const btns = $('#ct-c1-btns'); btns.innerHTML = '';
-  ['① 기존: 정적 (MatFormer)', '② 기존: SpMM (1D 재배열)', '③ 중심점별 앞쪽 몰기 (1*)', '④ 우리: 1* × 비격자 커버링'].forEach((label, idx) => {
+  ['① MatFormer (정적)', '② 기존 SpMM (1D)', '③ 중심점 앞쪽 몰기 (1*)', '④ 우리: 1* × 비격자'].forEach((label, idx) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
     b.textContent = label; b.setAttribute('aria-pressed', st.c1 === idx);
     b.onclick = () => { st.c1 = idx; drawC1(); };
@@ -2127,6 +2131,26 @@ function drawC1() {
       `<div class="panel"><div class="k">기존 1D SpMM → 우리 비격자 + 1* (같은 6×12 표)</div><div class="v on" style="font-size:14.5px">8틀→5틀 (-38%) · ×0 24→8칸 (-67%)</div></div>
        <div class="panel"><div class="k">실제 모델 1·2순위 고속 틀 비중 (B=2,048)</div><div class="v" style="font-size:15px">77.0% <span style="font-size:11.5px;color:var(--fg-3)">(저속 8×16 0.2% · 정확도 99.59%)</span></div></div>`;
   }
+
+  // 같은 6×12 표(필수 1 18칸 + 1* 6칸) 한눈 비교표: 네모 틀 수 · 연산할 칸 · 쓸데없는 0 개수 · 필수 1 보존
+  const c1Rows = [
+    { m: -1, name: '순서대로 끼우기 (기준)',         tiles: '12틀',    ops: '72칸', opsSub: '(100%)',  z: '48칸', zSub: '(66.7%)', zCls: 'warn', keep: '18 / 18', keepCls: '' },
+    { m: 0,  name: '① 기존: MatFormer (앞 4열)',     tiles: '고정 4열', ops: '24칸', opsSub: '(33.3%)', z: '17칸', zSub: '(70.8%)', zCls: 'warn', keep: '6 / 18 (12 누락)', keepCls: 'warn' },
+    { m: 1,  name: '② 기존: SpMM (최적 1D)',         tiles: '8틀',     ops: '48칸', opsSub: '(66.7%)', z: '24칸', zSub: '(50.0%)', zCls: 'warn', keep: '18 / 18 (1* 못 끔)', keepCls: 'mut' },
+    { m: 3,  name: '④ 우리: 1* × 비격자 커버링',     tiles: '5틀',     ops: '30칸', opsSub: '(41.7%)', z: '8칸',  zSub: '(26.7%)', zCls: 'ok',   keep: '18 / 18 (외딴 1* OFF)', keepCls: 'ok' },
+  ];
+  $('#ct-c1-tbl').innerHTML =
+    '<tr><th>방식 (같은 6×12 표 · 2×3 틀)</th><th>네모 틀 수</th><th>연산할 칸</th><th>쓸데없는 0 (×0)</th><th>필수 1 보존</th></tr>' +
+    c1Rows.map(r => {
+      const cls = r.m === 3 ? ' class="sum"' : (r.m === st.c1 ? ' style="background:rgba(240,180,92,0.08)"' : '');
+      return `<tr${cls}>
+        <td>${r.m === 3 ? '<b>' + r.name + '</b>' : r.name}</td>
+        <td class="num${r.m === 3 ? ' ok' : ''}">${r.tiles}</td>
+        <td class="num${r.m === 3 ? ' ok' : ''}"><b>${r.ops}</b> <span class="mut">${r.opsSub}</span></td>
+        <td class="num ${r.zCls}"><b>${r.z}</b> <span class="mut">${r.zSub}</span></td>
+        <td class="num ${r.keepCls}">${r.keep}</td>
+      </tr>`;
+    }).join('');
 }
 
 function drawC2() {
