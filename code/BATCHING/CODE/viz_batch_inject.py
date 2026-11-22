@@ -321,7 +321,7 @@ VIEW = MS + r'''
       <p class="key">기존 연구는 모든 입력에 같은 앞쪽 뉴런만 쓰거나(MatFormer), 입력 표의 1을 단 한 칸도 못 건드리는 고정 제약(PIT · TileSpMM) 아래서 타일을 짠다.</p>
       <ul>
         <li><b>중심점별 동적 앞쪽 몰기 (<span class="mono">1*</span> 생성):</b> 사후 학습에서 각 중심점마다 <b>서로 다른 고유 순위</b>로 에너지를 앞쪽에 몰아, 끝쪽 10%를 꺼도 정확도가 유지되는 유연한 버퍼(<span class="mono">1*</span>, Don't-Care)로 분리한다.</li>
-        <li><b>비격자 자유 행·열 조합 (<span class="mono">atomicAdd = 0</span>):</b> 전역 1D 행·열 줄 세우기(RCM·BCSR)를 버리고, SwiGLU 1단계의 열 독립성을 활용해 <b>타일마다 독립된 행·열 집합을 자유롭게 조합</b>한다.</li>
+        <li><b>비격자 자유 행·열 조합:</b> 전역 1D 행·열 줄 세우기(RCM·BCSR)의 가로 경계를 깨고, <b>타일마다 독립된 행·열 집합을 자유롭게 짝지어</b> GPU 텐서 코어 틀을 0 낭비 없이 빽빽하게 채운다.</li>
         <li><b>실측 GPU 비용 사다리 + <span class="mono">1*</span> 자동 정리:</b> <span class="mono">64×32 → 32×32 → 32×16 → 16×16 → 8×16</span> 실측 비용 사다리 위에서 <b>이미 열린 타일 안의 <span class="mono">1*</span>은 공짜 ON, 새 타일을 여는 외딴 <span class="mono">1*</span>은 자동 OFF</b>해 저속 <span class="mono">8×16</span> 비중을 <b>0.2%</b>까지 줄이고 정확도 <b>99.59%</b>를 지켰다.</li>
       </ul>
       <p class="note">오른쪽 칩을 차례로 눌러 같은 <span class="mono">6×12</span> 표 위에서 ① 기존 정적 몰기(MatFormer), ② 기존 SpMM(1D 재배열), ③ 중심점별 앞쪽 몰기(<span class="mono">1*</span>), ④ <span class="mono">1*</span> × 비격자 5단계 커버링을 같은 스케일로 비교해 보라.</p>
