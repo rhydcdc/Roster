@@ -513,7 +513,7 @@ footer { color: var(--fg-3); font-size: 12.5px; padding-block: 36px 48px; border
         <li>토큰마다 간 중심점이 달라 <span class="mono">1</span>의 위치가 제각각 흩어져 있다. 들어온 순서대로 틀을 씌우면 틀 안의 대부분이 불필요한 <span class="mono">0</span>(<span class="mono">×0</span>)으로 찬다.</li>
         <li>최종 모델은 중심점 목록의 <b>끝쪽 10%('꺼도 되는 1', <span class="mono">1*</span>)</b>는 꺼도 시험 정확도가 통과한다(일괄 10% 끄기: 90.62%, 통과선 90.52%).</li>
       </ul>
-      <p class="why">오른쪽에서 '순서대로 틀 끼우기'를 눌러 보라. 아래 예시는 실제 8×16 틀을 2×3으로 축소한 것이다. 12개 틀을 하나도 건너뛸 수 없어 전체 72칸 중 48칸(66.7%)이 불필요한 0 계산으로 낭비된다.</p>
+      <p class="why">오른쪽에서 <b>② 순서대로 틀 끼우기</b>와 <b>③ 기존 SpMM (1D 재배열)</b>을 눌러 비교해 보라. 아래 예시는 실제 8×16 틀을 2×3으로 축소한 것이다. 순서대로 끼우면 12틀(72칸) 중 48칸(66.7%)이 0으로 낭비되고, 기존 SpMM처럼 표 전체 행·열을 최적으로 1번 줄 세워 빈 틀 4개를 건너뛰어도 <b>가로 조 경계선</b>에 막혀 8틀(48칸) 중 절반인 24칸(50.0%)이 여전히 0으로 낭비된다.</p>
     </div>
     <div class="vis">
       <div class="row" style="justify-content:space-between;gap:8px">
@@ -1095,7 +1095,7 @@ const nf = v => Number(v).toLocaleString('ko-KR');
 function el(t, a = {}, p) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
 function tx(p, x, y, s, a = {}) { const t = el('text', Object.assign({ x, y }, a), p); t.textContent = s; return t; }
 
-// ---- 묶기 1: 문제 상황 (6행 x 12열, 순서대로 2x3 틀 씌우기 — 유지) ----
+// ---- 묶기 1: 문제 상황 (6행 x 12열, ① 원래 표 / ② 순서대로 2x3 / ③ 기존 SpMM 최적 1D 재배열) ----
 const P1_ROWS = ['T1 가', 'T2 나', 'T3 다', 'T4 라', 'T5 마', 'T6 바'];
 const P1_G = [
   [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 2, 0],
@@ -1105,52 +1105,82 @@ const P1_G = [
   [0, 1, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0],
   [0, 0, 1, 0, 1, 0, 0, 0, 2, 0, 0, 1],
 ];
+// 전수 탐색으로 증명된 P1_G의 이론상 최적 1D SpMM 행·열 재배열 (빈 2x3 틀 4개 생략, 8틀 = 48칸 중 0이 24칸 = 50.0%)
+const P1_SPMM_R = [0, 4, 1, 5, 2, 3];
+const P1_SPMM_C = [0, 3, 6, 1, 8, 11, 2, 4, 5, 7, 9, 10];
 function drawProb() {
   const btns = $('#bt-p1-btns'); btns.innerHTML = '';
-  ['① 토큰 × 뉴런 표', '② 순서대로 틀(2×3) 끼우기'].forEach((label, idx) => {
+  ['① 토큰 × 뉴런 표', '② 순서대로 틀(2×3) 끼우기', '③ 기존 SpMM (1D 재배열)'].forEach((label, idx) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
     b.textContent = label; b.setAttribute('aria-pressed', st.p1 === idx);
     b.onclick = () => { st.p1 = idx; drawProb(); };
     btns.appendChild(b);
   });
-  $('#bt-p1-cap').textContent = st.p1 ? '2×3 틀 12개 · 모든 틀에 불필요한 0이 4칸씩' : '토큰 6개 × 뉴런 12개 · 1이 산발적으로 흩어짐';
+  const caps = [
+    '토큰 6개 × 뉴런 12개 · 1이 산발적으로 흩어짐',
+    '2×3 틀 12개 · 모든 틀에 불필요한 0이 4칸씩',
+    '최적 1D 행·열 줄 세우기 · 빈 4틀 생략해도 가로 경계선 때문에 절반이 0',
+  ];
+  $('#bt-p1-cap').textContent = caps[st.p1];
+
+  const isSpmm = st.p1 === 2;
+  const rOrd = isSpmm ? P1_SPMM_R : [0, 1, 2, 3, 4, 5];
+  const cOrd = isSpmm ? P1_SPMM_C : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  const cellVal = (r, c) => P1_G[rOrd[r]][cOrd[c]];
+
+  // Precompute active 2x3 blocks (all 12 active in mode 1; 8 active + 4 skipped in mode 2)
+  const blkAct = Array.from({ length: 3 }, (_, br) => Array.from({ length: 4 }, (_, bc) => {
+    let cnt = 0;
+    for (let dr = 0; dr < 2; dr++) for (let dc = 0; dc < 3; dc++) if (cellVal(br * 2 + dr, bc * 3 + dc) > 0) cnt++;
+    return cnt;
+  }));
 
   const host = $('#bt-p1-svg'); host.innerHTML = '';
   const W = Math.max(320, host.clientWidth || 540), lx = 58, rx = 10, top = 28;
   const cs = Math.min(36, (W - lx - rx) / 12), H = top + 6 * cs + 14;
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '토큰 6개 x 뉴런 12개 표와 순서대로 2x3 틀 씌우기' }, host);
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '토큰 6개 x 뉴런 12개 표, 순서대로 2x3 끼우기, 기존 SpMM 1D 재배열 비교' }, host);
   const tip = $('#tip');
 
   tx(svg, lx - 8, top - 9, '뉴런', { 'text-anchor': 'end' });
-  for (let c = 0; c < 12; c++) tx(svg, lx + c * cs + cs / 2, top - 9, 'N' + (c + 1), { 'text-anchor': 'middle' });
-  for (let r = 0; r < 6; r++) tx(svg, lx - 8, top + r * cs + cs / 2 + 4, P1_ROWS[r], { 'text-anchor': 'end', class: 'lab' });
+  for (let c = 0; c < 12; c++) tx(svg, lx + c * cs + cs / 2, top - 9, 'N' + (cOrd[c] + 1), { 'text-anchor': 'middle' });
+  for (let r = 0; r < 6; r++) tx(svg, lx - 8, top + r * cs + cs / 2 + 4, P1_ROWS[rOrd[r]], { 'text-anchor': 'end', class: 'lab' });
 
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 12; c++) {
-      const v = P1_G[r][c], x = lx + c * cs + 2, y = top + r * cs + 2, s = cs - 4;
-      let fill = C.off, stroke = 'none', dash = '';
+      const v = cellVal(r, c), x = lx + c * cs + 2, y = top + r * cs + 2, s = cs - 4;
+      const br = r >> 1, bc = Math.floor(c / 3);
+      const inTileNow = st.p1 === 1 || (isSpmm && blkAct[br][bc] > 0);
+      const skipped = isSpmm && blkAct[br][bc] === 0;
+      let fill = skipped ? C.bg : C.off, stroke = 'none', dash = '', op = skipped ? 0.45 : 1;
       if (v === 1) fill = C.on;
       else if (v === 2) { fill = C.onsoft; stroke = C.on; dash = '3 2'; }
-      else if (st.p1 === 1) fill = C.pick;
-      const attrs = { x, y, width: s, height: s, rx: 3, fill };
+      else if (inTileNow) fill = C.pick;
+      const attrs = { x, y, width: s, height: s, rx: 3, fill, opacity: op };
       if (stroke !== 'none') { attrs.stroke = stroke; attrs['stroke-width'] = 1.4; if (dash) attrs['stroke-dasharray'] = dash; }
       el('rect', attrs, svg);
       if (v === 2) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 4, '1*', { 'text-anchor': 'middle', fill: C.on, 'font-size': Math.max(9.5, cs * 0.34), 'font-weight': 600 });
-      else if (v === 0 && st.p1 === 1) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 3.5, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': Math.max(8.5, cs * 0.30) });
+      else if (v === 0 && inTileNow) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 3.5, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': Math.max(8.5, cs * 0.30) });
     }
   }
-  if (st.p1 === 1) {
+  if (st.p1 >= 1) {
     let tid = 0;
     for (let br = 0; br < 3; br++) {
       for (let bc = 0; bc < 4; bc++) {
-        tid++;
+        const aCnt = blkAct[br][bc], zCnt = 6 - aCnt;
+        const skip = isSpmm && aCnt === 0;
         const x = lx + bc * 3 * cs, y = top + br * 2 * cs, w = 3 * cs, h = 2 * cs;
-        const box = el('rect', { x: x + 0.5, y: y + 0.5, width: w - 1, height: h - 1, rx: 4, fill: 'transparent', stroke: C.fg, 'stroke-width': 1.3, 'stroke-opacity': 0.7, style: 'cursor:pointer' }, svg);
-        const idCopy = tid;
+        if (skip) {
+          el('rect', { x: x + 1, y: y + 1, width: w - 2, height: h - 2, rx: 4, fill: 'transparent', stroke: C.line2, 'stroke-width': 1, 'stroke-dasharray': '3 3' }, svg);
+          tx(svg, x + w / 2, y + h / 2 + 3.5, '건너뜀', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': Math.max(9.5, cs * 0.30) });
+          continue;
+        }
+        tid++;
+        const box = el('rect', { x: x + 0.5, y: y + 0.5, width: w - 1, height: h - 1, rx: 4, fill: 'transparent', stroke: C.fg, 'stroke-width': 1.3, 'stroke-opacity': 0.72, style: 'cursor:pointer' }, svg);
+        const idCopy = tid, aCopy = aCnt, zCopy = zCnt;
         box.addEventListener('pointerenter', ev => {
           box.setAttribute('stroke', C.on); box.setAttribute('stroke-width', 2.2); box.setAttribute('stroke-opacity', 1);
           tip.hidden = false;
-          tip.textContent = `틀 #${idCopy} (2×3): 쓰는 1 = 2칸 · 불필요한 0 = 4칸 (채움 33%)`;
+          tip.textContent = `틀 #${idCopy} (2×3): 쓰는 1 = ${aCopy}칸 · 불필요한 0 = ${zCopy}칸 (채움 ${Math.round(100 * aCopy / 6)}%)`;
           tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px';
           tip.style.top = (ev.clientY - 34) + 'px';
         });
@@ -1159,17 +1189,26 @@ function drawProb() {
           tip.style.top = (ev.clientY - 34) + 'px';
         });
         box.addEventListener('pointerleave', () => {
-          box.setAttribute('stroke', C.fg); box.setAttribute('stroke-width', 1.3); box.setAttribute('stroke-opacity', 0.7);
+          box.setAttribute('stroke', C.fg); box.setAttribute('stroke-width', 1.3); box.setAttribute('stroke-opacity', 0.72);
           tip.hidden = true;
         });
       }
     }
+    if (isSpmm) {
+      for (const br of [1, 2]) {
+        const y = top + br * 2 * cs;
+        el('line', { x1: lx - 4, x2: lx + 12 * cs + 4, y1: y, y2: y, stroke: C.pick, 'stroke-width': 1.8, 'stroke-dasharray': '5 3', opacity: 0.9 }, svg);
+      }
+    }
   }
-  $('#bt-p1-kpi').innerHTML = st.p1
+  $('#bt-p1-kpi').innerHTML = st.p1 === 2
     ? `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
-       <div class="panel"><div class="k">순서대로 틀 끼운 결과 (2×3 × 12틀)</div><div class="v pick">불필요한 0이 48칸 (66.7%)</div></div>`
-    : `<div class="panel"><div class="k">표 크기 (세로 토큰 × 가로 뉴런)</div><div class="v">6행 × 12열 = 72칸</div></div>
-       <div class="panel"><div class="k">필요한 뉴런</div><div class="v on">필수 18칸 + 끝쪽 1* 6칸</div></div>`;
+       <div class="panel"><div class="k">최적 1D SpMM (2×3 × 8틀 · 빈 4틀 생략)</div><div class="v pick">불필요한 0이 24칸 (50.0%) <span style="font-size:11.5px;color:var(--fg-3)">가로 격자 한계</span></div></div>`
+    : st.p1 === 1
+      ? `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
+         <div class="panel"><div class="k">순서대로 틀 끼운 결과 (2×3 × 12틀)</div><div class="v pick">불필요한 0이 48칸 (66.7%)</div></div>`
+      : `<div class="panel"><div class="k">표 크기 (세로 토큰 × 가로 뉴런)</div><div class="v">6행 × 12열 = 72칸</div></div>
+         <div class="panel"><div class="k">필요한 뉴런</div><div class="v on">필수 18칸 + 끝쪽 1* 6칸</div></div>`;
 }
 
 // ---- 묶기 2: 5단계 다중 크기 순위 Roster-Tile 7단계 예시 (8행 x 12열, 1/8 축소판 8x4 -> 4x4 -> 4x2 -> 2x2 -> 1x2) ----
