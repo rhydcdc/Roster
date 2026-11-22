@@ -18,7 +18,7 @@ BUILD = os.path.join(PROJ, 'VIZ', 'CODE', 'build_local.py')
 LOCAL = os.path.join(PROJ, 'RECIPE_VIZ.html')
 MS, ME = '<!-- 배칭 시작 -->', '<!-- 배칭 끝 -->'
 
-TAB = MS + '<button id="tab-batch" type="button" aria-pressed="false">묶어서 계산</button>' + ME
+TAB = MS + '<button id="tab-batch" type="button" aria-pressed="false">묶어서 계산</button><button id="tab-contrib" type="button" aria-pressed="false">핵심 기여</button>' + ME
 
 PRE = MS + '<script>window.__HASH0__ = location.hash;</script>' + ME
 
@@ -26,9 +26,9 @@ VIEW = MS + r'''
   <!-- ============ 묶어서 계산 (Roster-Tile) ============ -->
   <div class="view" id="view-batch" hidden>
   <style>
-  #view-batch .step, #view-batch .split { align-items: start; }
-  #view-batch .bt-wide { grid-column: 1 / -1; }
-  #view-batch .bt-tbl-wrap { width: 100%; overflow-x: auto; }
+  #view-batch .step, #view-batch .split, #view-contrib .step, #view-contrib .split { align-items: start; }
+  #view-batch .bt-wide, #view-contrib .bt-wide { grid-column: 1 / -1; }
+  #view-batch .bt-tbl-wrap, #view-contrib .bt-tbl-wrap { width: 100%; overflow-x: auto; }
   .bt-intro { padding-block: 36px 8px; border-top: 1px solid var(--line); }
   .bt-intro .no { font-family: var(--mono); font-size: 12px; color: var(--pick); letter-spacing: 0.06em; }
   .bt-intro h2 { font-size: 22px; margin-top: 8px; }
@@ -296,6 +296,100 @@ VIEW = MS + r'''
     </div></details>
   </section>
   </div>
+
+  <!-- ============ 핵심 기여 (Key Contributions) ============ -->
+  <div class="view" id="view-contrib" hidden>
+  <section class="bt-intro">
+    <div class="no">핵심 기여 · Key Contributions</div>
+    <h2>알고리즘(중심점 · 1*)과 하드웨어(비격자 5단계 타일링)를 맞물려, 기존 문맥적 희소성의 대형 배치 한계를 돌파했다</h2>
+    <p>기존 문맥적 희소성 연구는 단일 요청(<span class="mono">B=1</span>)에만 머물거나 대형 배치에서 활성 뉴런 합집합이 100%에 육박해 붕괴했다. <b style="color:var(--fg);font-weight:600">Roster</b>는 ① 중심점별 앞쪽 몰기(<span class="mono">1*</span>) × 비격자 5단계 타일 커버링, ② 라우터 없는 유한 중심점 가변 명단 + 배치 자동 합승, ③ 단일 요청과 대형 서버 배치를 모두 뚫은 실측 코디자인이라는 <b style="color:var(--fg);font-weight:600">3가지 핵심 축</b>으로 이 벽을 정면 돌파했다.</p>
+    <div class="stats">
+      <div class="stat"><div class="v num on">3가지 핵심 축</div><div class="k">1* × 비격자 타일링 · 유한 중심점 합승 · 대형 배치 돌파</div></div>
+      <div class="stat"><div class="v num" style="color:var(--neg)">5.33 ~ 6.55배</div><div class="k">단일 요청(B=1) RTX 4060 실측 · 정확도 99.63%</div></div>
+      <div class="stat"><div class="v num on">최대 2.72배</div><div class="k">대형 서버(B=512 ~ 2,048) 실측 · 정확도 99.59%</div></div>
+    </div>
+  </section>
+
+  <section class="step" id="c1">
+    <div class="txt">
+      <div class="no">핵심 기여 1 · 중심점별 앞쪽 몰기(1*) × 비격자 5단계 타일 커버링</div>
+      <h2>중심점마다 ‘꺼도 되는 1(1*)’ 자유도를 심어 두고, 비격자 5단계 타일이 행·열을 자유롭게 짝지어 취사선택한다</h2>
+      <p class="key">기존 연구는 모든 입력에 같은 앞쪽 뉴런만 쓰거나(MatFormer), 입력 표의 1을 단 한 칸도 못 건드리는 고정 제약(PIT · TileSpMM) 아래서 타일을 짠다.</p>
+      <ul>
+        <li><b>중심점별 동적 앞쪽 몰기 (<span class="mono">1*</span> 생성):</b> 사후 학습에서 각 중심점마다 <b>서로 다른 고유 순위</b>로 에너지를 앞쪽에 몰아, 끝쪽 10%를 꺼도 정확도가 유지되는 유연한 버퍼(<span class="mono">1*</span>, Don't-Care)로 분리한다.</li>
+        <li><b>비격자 자유 행·열 조합 (<span class="mono">atomicAdd = 0</span>):</b> 전역 1D 행·열 줄 세우기(RCM·BCSR)를 버리고, SwiGLU 1단계의 열 독립성을 활용해 <b>타일마다 독립된 행·열 집합을 자유롭게 조합</b>한다.</li>
+        <li><b>실측 GPU 비용 사다리 + <span class="mono">1*</span> 자동 정리:</b> <span class="mono">64×32 → 32×32 → 32×16 → 16×16 → 8×16</span> 실측 비용 사다리 위에서 <b>이미 열린 타일 안의 <span class="mono">1*</span>은 공짜 ON, 새 타일을 여는 외딴 <span class="mono">1*</span>은 자동 OFF</b>해 저속 <span class="mono">8×16</span> 비중을 <b>0.2%</b>까지 줄이고 정확도 <b>99.59%</b>를 지켰다.</li>
+      </ul>
+      <p class="note">오른쪽 칩을 차례로 눌러 ① 기존 방식의 한계, ② 중심점 A·B·C별 서로 다른 앞쪽 몰기, ③ <span class="mono">1*</span> × 비격자 5단계 타일링의 결합 효과를 비교해 보라.</p>
+    </div>
+    <div class="vis">
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <div class="chips" id="ct-c1-btns"></div>
+        <span class="lbl" id="ct-c1-cap"></span>
+      </div>
+      <div class="row" id="ct-c1-subrow" style="justify-content:space-between;gap:8px;display:none">
+        <span class="lbl">중심점 선택 (각자 다른 뉴런 순위):</span>
+        <div class="bt-strip-chips" id="ct-c1-cchips"></div>
+      </div>
+      <div class="bt-svg" id="ct-c1-svg"></div>
+      <div class="bt-kpi" id="ct-c1-kpi"></div>
+    </div>
+  </section>
+
+  <section class="step" id="c2">
+    <div class="txt">
+      <div class="no">핵심 기여 2 · 라우터 없는 유한 중심점 가변 명단 + 배치 자동 합승</div>
+      <h2>별도 예측기·라우터 없이 내적 1회로 가변 명단을 선제 확정하고, 배치가 커질수록 같은 중심점끼리 자동 합승한다</h2>
+      <p class="key">토큰마다 MLP 예측기로 4,096개 중 제각각 고르는 기존 방식(Deja Vu · ShadowLLM)은 배치에서 토큰끼리 겹치지 않아 대형 배치에서 무너진다.</p>
+      <ul>
+        <li><b>라우터·예측기 제거 + 3개 행렬 선제 스킵:</b> 입력 은닉 상태 <span class="mono">h</span>와 256개 중심점의 내적 1회만으로 <b>겹침을 허용하는 가변 길이 명단(<span class="mono">K_j</span>)</b>을 꺼내, <span class="mono">gate · up · down</span> 세 행렬을 계산 전부터 통째로 건너뛴다.</li>
+        <li><b>전문가 경계 손실 제거:</b> 뉴런을 겹침 없는 고정 전문가 조각으로 쪼개고 라우터를 학습하는 MoEfication과 달리, 공용 뉴런은 여러 중심점이 자유롭게 공유한다.</li>
+        <li><b>유한 코드북 → 배치 자동 합승:</b> 중심점이 256개로 유한하므로 배치가 커질수록 <b>같은 중심점을 고른 토큰들이 출력 변화 0%로 자동 합승</b>한다. 배치가 커질수록 느려지는 기존 방식과 반대로, 우리는 배치가 커질수록 0 패딩 없는 큰 덩어리가 저절로 커진다.</li>
+      </ul>
+      <p class="note">오른쪽에서 ① 기존 라우터·예측기와의 구조 비교와 ② 배치 크기(<span class="mono">B=1 → 8,192</span>)에 따른 자동 합승 시뮬레이션을 직접 눌러 보라.</p>
+    </div>
+    <div class="vis">
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <div class="chips" id="ct-c2-btns"></div>
+        <span class="lbl" id="ct-c2-cap"></span>
+      </div>
+      <div class="row" id="ct-c2-brow" style="justify-content:space-between;gap:8px">
+        <span class="lbl">배치 토큰 수 (B):</span>
+        <div class="bt-strip-chips" id="ct-c2-bchips"></div>
+      </div>
+      <div class="bt-svg" id="ct-c2-svg"></div>
+      <div class="bt-kpi" id="ct-c2-kpi"></div>
+    </div>
+  </section>
+
+  <section class="step" id="c3">
+    <div class="txt">
+      <div class="no">핵심 기여 3 · 대형 배치 FFN 붕괴 돌파 (단일 요청 &amp; 대형 서버 동시 실측)</div>
+      <h2>단일 요청은 6.55배 직접 가속, 기존 연구가 포기한 대형 서버 배치에서도 순수 bf16 실측 최대 2.72배를 증명했다</h2>
+      <p class="key">기존 문맥적 희소성(PowerInfer · TurboSparse · CATS)은 단일 요청(B=1) 전용에 머물고, Polar Sparsity는 대형 배치 FFN을 포기하고 어텐션으로 우회했다.</p>
+      <ul>
+        <li><b>단일 요청 환경 (<span class="mono">B = 1</span> · 로컬/개인 LLM):</b> 타일링과 <span class="mono">1*</span> 탈락 없이 활성 뉴런(13.7%)만 직통 GEMV로 읽어, RTX 4060 실측 <b>5.33배(<span class="mono">d=1,024</span>) · 6.55배(<span class="mono">d=4,096</span>)</b>, 정확도 <b>99.63%</b>를 달성했다.</li>
+        <li><b>대형 서버 환경 (<span class="mono">B = 512 ~ 2,048</span> · Chunked Prefill):</b> 0 마스킹이 <b>1.00 ~ 1.05배</b>로 제자리인 합집합 83% 구간에서, 자동 합승 + <span class="mono">1*</span> + 5단계 <span class="mono">Roster-Tile</span> + L2 열-스트립으로 <b>최대 2.56배(<span class="mono">d=1,024</span>) · 2.72배(<span class="mono">d=4,096</span>)</b>, 정확도 <b>99.59%</b>를 실측했다.</li>
+        <li><b>순수 <span class="mono">bf16</span> · 양자화 없음:</b> 정밀도 손실 없이 구조적 희소성과 텐서 코어 코디자인만으로 얻은 순수 가속이라, 기존 양자화 기법과도 직교 결합이 가능하다.</li>
+      </ul>
+    </div>
+    <div class="vis">
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <h3 style="font-size:14px">단일 요청(B=1) vs 대형 서버(B=512~2,048) 파이프라인 &amp; 실측</h3>
+        <span class="lbl">RTX 4060 · bf16</span>
+      </div>
+      <div class="bt-svg" id="ct-c3-svg"></div>
+      <div class="bt-kpi" id="ct-c3-kpi"></div>
+    </div>
+    <div class="bt-wide">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <h3 style="font-size:14px">선행 연구 대비 핵심 특성 한눈에 비교</h3>
+        <span class="lbl">○ 지원 · △ 부분 지원 · × 미지원</span>
+      </div>
+      <div class="bt-tbl-wrap"><table class="bt-tbl" id="ct-cmp-tbl"></table></div>
+    </div>
+  </section>
+  </div>
   ''' + ME
 
 POST = MS + r'''<script>
@@ -308,7 +402,7 @@ const $ = (s, e = document) => e.querySelector(s);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const NS = 'http://www.w3.org/2000/svg';
 const C = {};
-const st = { p1: 1, step: 0, batch: '2048', cache: 2, strip: 0 };
+const st = { p1: 1, step: 0, batch: '2048', cache: 2, strip: 0, c1: 2, c1c: 0, c2: 1, c2b: 2048 };
 const nf = v => Number(v).toLocaleString('ko-KR');
 function el(t, a = {}, p) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
 function tx(p, x, y, s, a = {}) { const t = el('text', Object.assign({ x, y }, a), p); t.textContent = s; return t; }
@@ -911,25 +1005,403 @@ function drawHwBench() {
      <div class="panel"><div class="k">출력 정합성 (PyTorch fp32 기준)</div><div class="v" style="font-size:15px">최대 오차 ${(maxErr * 100).toFixed(2)}% <span style="font-size:11.5px;color:var(--fg-3)">(단일·서버 전 설정 bf16 통과)</span></div></div>`;
 }
 
+// ---- 핵심 기여 탭 (3개 인터랙티브 시각화 + 선행 연구 비교 매트릭스) ----
+const C1_CENTROIDS = [
+  { name: '중심점 A (부츠)',  raw: [0.62, 0.25, 0.36, 0.71, 0.14, 0.22, 0.68, 0.18, 0.15, 0.58, 0.19, 0.12], top: [0, 3, 6, 9],  opt: 2 },
+  { name: '중심점 B (셔츠)',  raw: [0.16, 0.69, 0.21, 0.14, 0.64, 0.34, 0.18, 0.72, 0.15, 0.12, 0.59, 0.20], top: [1, 4, 7, 10], opt: 5 },
+  { name: '중심점 C (가방)',  raw: [0.35, 0.18, 0.74, 0.15, 0.21, 0.67, 0.13, 0.19, 0.65, 0.14, 0.16, 0.61], top: [2, 5, 8, 11], opt: 0 },
+];
+
+function drawC1() {
+  const btns = $('#ct-c1-btns'); btns.innerHTML = '';
+  ['① 기존 방식 (고정 1 · 정적)', '② 중심점별 앞쪽 몰기 (1*)', '③ 1* × 비격자 5단계 커버링'].forEach((label, idx) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+    b.textContent = label; b.setAttribute('aria-pressed', st.c1 === idx);
+    b.onclick = () => { st.c1 = idx; drawC1(); };
+    btns.appendChild(b);
+  });
+  const caps = [
+    'MatFormer(전역 정적) · PIT/TileSpMM(고정 1) 한계',
+    '중심점마다 고유 순위로 앞쪽에 몰고 끝 10%를 1*로 분리',
+    '열린 틀 안 1* 공짜 ON · 외딴 1* 자동 OFF + 5단계 실측 비용',
+  ];
+  $('#ct-c1-cap').textContent = caps[st.c1];
+
+  const subRow = $('#ct-c1-subrow');
+  subRow.style.display = st.c1 === 1 ? 'flex' : 'none';
+  if (st.c1 === 1) {
+    const cc = $('#ct-c1-cchips'); cc.innerHTML = '';
+    C1_CENTROIDS.forEach((c, idx) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+      b.textContent = c.name; b.setAttribute('aria-pressed', st.c1c === idx);
+      b.onclick = () => { st.c1c = idx; drawC1(); };
+      cc.appendChild(b);
+    });
+  }
+
+  const host = $('#ct-c1-svg'); host.innerHTML = '';
+  const W = Math.max(340, host.clientWidth || 540), pad = 12;
+
+  if (st.c1 === 0) {
+    const H = 250;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 정적 앞쪽 몰기 및 고정 1 타일링 한계' }, host);
+    // 상단: MatFormer 전역 정적 앞쪽 몰기
+    el('rect', { x: pad, y: 8, width: W - 2 * pad, height: 108, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
+    tx(svg, pad + 12, 26, '기존 ① MatFormer (전역 정적 앞쪽 몰기) — 모든 입력이 똑같은 앞쪽 뉴런만 공유', { class: 'hi', 'font-size': 11 });
+    const cw = Math.min(28, (W - 2 * pad - 110) / 10), sx0 = pad + 88;
+    ['중심점 A', '중심점 B', '중심점 C'].forEach((lbl, r) => {
+      const y = 36 + r * 24;
+      tx(svg, sx0 - 8, y + 13, lbl, { 'text-anchor': 'end', class: 'lab', 'font-size': 10 });
+      for (let c = 0; c < 10; c++) {
+        const inFix = c < 4;
+        const miss = (r === 1 && (c === 5 || c === 7)) || (r === 2 && (c === 6 || c === 8));
+        const f = inFix ? C.onsoft : (miss ? C.picksoft : C.bg);
+        const stc = inFix ? C.on : (miss ? C.pick : C.line);
+        el('rect', { x: sx0 + c * (cw + 2), y, width: cw, height: 18, rx: 3, fill: f, stroke: stc, 'stroke-width': 1 }, svg);
+        if (miss) tx(svg, sx0 + c * (cw + 2) + cw / 2, y + 12.5, '누락', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 8, 'font-weight': 600 });
+        else if (inFix && r === 0) tx(svg, sx0 + c * (cw + 2) + cw / 2, y + 12.5, 'N' + (c + 1), { 'text-anchor': 'middle', fill: C.on, 'font-size': 8.5 });
+      }
+    });
+    tx(svg, sx0 + 4 * (cw + 2) + 8, 108, '← 전역 앞 4개 고정: 문맥별 핵심 뉴런을 못 고름', { fill: C.pick, 'font-size': 9.5 });
+
+    // 하단: 고정 1 제약 타일링 (PIT / TileSpMM 등)
+    el('rect', { x: pad, y: 128, width: W - 2 * pad, height: 112, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
+    tx(svg, pad + 12, 146, '기존 ② 고정 1 타일링 (PIT · TileSpMM) — 외딴 1 하나도 절대 못 끔', { class: 'hi', 'font-size': 11 });
+    const gcs = Math.min(26, (W - 2 * pad - 180) / 6), gx0 = pad + 16, gy0 = 158;
+    const mg = [[1, 0, 1, 0, 1, 0], [0, 0, 0, 0, 0, 1]];
+    for (let r = 0; r < 2; r++) {
+      for (let c = 0; c < 6; c++) {
+        const v = mg[r][c], isIso = r === 1 && c === 5;
+        const f = v ? (isIso ? C.pick : C.on) : (r === 1 && c >= 3 ? C.picksoft : C.bg);
+        el('rect', { x: gx0 + c * gcs + 1.5, y: gy0 + r * gcs + 1.5, width: gcs - 3, height: gcs - 3, rx: 3, fill: f, stroke: isIso ? C.fg : C.line, 'stroke-width': isIso ? 1.5 : 0.8 }, svg);
+        if (r === 1 && c >= 3 && !v) tx(svg, gx0 + c * gcs + gcs / 2, gy0 + r * gcs + gcs / 2 + 3, '×0', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 8.5, 'font-weight': 600 });
+        if (isIso) tx(svg, gx0 + c * gcs + gcs / 2, gy0 + r * gcs + gcs / 2 + 3, '1', { 'text-anchor': 'middle', fill: C.bg, 'font-size': 9.5, 'font-weight': 700 });
+      }
+    }
+    el('rect', { x: gx0 + 3 * gcs, y: gy0 + gcs, width: 3 * gcs, height: gcs, rx: 4, fill: 'none', stroke: C.pick, 'stroke-width': 1.8, 'stroke-dasharray': '4 2' }, svg);
+    const txX = gx0 + 6 * gcs + 14;
+    tx(svg, txX, gy0 + 18, '외딴 1 (끝쪽 10%)', { fill: C.pick, 'font-size': 10.5, 'font-weight': 600 });
+    tx(svg, txX, gy0 + 35, '→ 새 저속 틀 강제 오픈', { class: 'lab', 'font-size': 10 });
+    tx(svg, txX, gy0 + 50, '→ 불필요한 ×0 대량 발생', { class: 'lab', 'font-size': 10 });
+
+    $('#ct-c1-kpi').innerHTML =
+      `<div class="panel"><div class="k">기존 정적 앞쪽 몰기 (MatFormer)</div><div class="v pick" style="font-size:15px">문맥별 뉴런 특화 불가</div></div>
+       <div class="panel"><div class="k">기존 고정 1 타일링</div><div class="v pick" style="font-size:15px">외딴 꼬리 1 때문에 0 패딩 증가</div></div>`;
+  } else if (st.c1 === 1) {
+    const H = 248, cur = C1_CENTROIDS[st.c1c];
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '중심점별 앞쪽 몰기 학습 압력으로 1* 자유도 생성' }, host);
+    const bw = (W - 2 * pad - 11 * 4) / 12, barMax = 52;
+
+    tx(svg, pad, 15, `${cur.name} · 학습 전 (중요도가 12개 뉴런 전체에 산발 분포)`, { class: 'hi', 'font-size': 11 });
+    cur.raw.forEach((v, i) => {
+      const x = pad + i * (bw + 4), bh = Math.max(4, v * barMax), y = 78 - bh;
+      const isTop = cur.top.includes(i), isOpt = i === cur.opt;
+      el('rect', { x, y, width: bw, height: bh, rx: 3, fill: isTop ? C.on : (isOpt ? C.neg : C.off), opacity: isTop ? 0.9 : 0.7 }, svg);
+      tx(svg, x + bw / 2, 92, 'N' + (i + 1), { 'text-anchor': 'middle', 'font-size': 8.5, fill: isTop ? C.on : C.fg3 });
+    });
+
+    // 화살표: 앞쪽 몰기 압력
+    const midX = W / 2;
+    el('line', { x1: midX, y1: 100, x2: midX, y2: 122, stroke: C.on, 'stroke-width': 2 }, svg);
+    el('polygon', { points: `${midX - 5},118 ${midX + 5},118 ${midX},126`, fill: C.on }, svg);
+    tx(svg, midX + 10, 116, '중심점별 고유 순위로 앞쪽 몰기 손실 압력 적용', { fill: C.on, 'font-size': 10.5, 'font-weight': 600 });
+
+    tx(svg, pad, 144, `${cur.name} · 학습 후 (고유 앞쪽 4개 필수 1 + 끝쪽 10% 1* Don't-Care)`, { class: 'hi', 'font-size': 11 });
+    const rest = Array.from({ length: 12 }, (_, i) => i).filter(i => !cur.top.includes(i) && i !== cur.opt);
+    const ordered = [...cur.top, cur.opt, ...rest];
+    ordered.forEach((nid, pos) => {
+      const x = pad + pos * (bw + 4);
+      const isMand = pos < 4, isOpt = pos === 4;
+      const h = isMand ? [48, 44, 40, 36][pos] : (isOpt ? 20 : 3);
+      const y = 208 - h;
+      const fill = isMand ? C.on : (isOpt ? C.neg : C.bg3);
+      el('rect', { x, y, width: bw, height: h, rx: 3, fill, stroke: isOpt ? C.fg : 'none', 'stroke-width': isOpt ? 1.2 : 0, 'stroke-dasharray': isOpt ? '3 2' : '' }, svg);
+      tx(svg, x + bw / 2, 222, 'N' + (nid + 1), { 'text-anchor': 'middle', 'font-size': 8.5, fill: isMand ? C.on : (isOpt ? C.neg : C.fg3), 'font-weight': isMand || isOpt ? 600 : 400 });
+    });
+    // 영역 브래킷 라벨
+    const xMandEnd = pad + 4 * (bw + 4) - 4;
+    const xOptX = pad + 4 * (bw + 4);
+    el('line', { x1: pad, x2: xMandEnd, y1: 230, y2: 230, stroke: C.on, 'stroke-width': 1.5 }, svg);
+    tx(svg, (pad + xMandEnd) / 2, 243, '필수 1 (90%)', { 'text-anchor': 'middle', fill: C.on, 'font-size': 9.5, 'font-weight': 600 });
+    tx(svg, xOptX + bw / 2, 243, '1* (10%)', { 'text-anchor': 'middle', fill: C.neg, 'font-size': 9.5, 'font-weight': 600 });
+    tx(svg, (xOptX + bw + 8 + W - pad) / 2, 243, '완전 OFF (0 · 계산 안 함)', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 9.5 });
+
+    $('#ct-c1-kpi').innerHTML =
+      `<div class="panel"><div class="k">${cur.name} 필수 명단 (90%)</div><div class="v on" style="font-size:15px">${cur.top.map(i => 'N' + (i + 1)).join(' · ')}</div></div>
+       <div class="panel"><div class="k">유연한 버퍼 1* (끝쪽 10%)</div><div class="v neg" style="font-size:15px">N${cur.opt + 1}* <span style="font-size:11.5px;color:var(--fg-3)">(타일 사정에 따라 ON/OFF)</span></div></div>`;
+  } else {
+    const H = 262;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '1* Don\'t-Care와 비격자 5단계 타일 커버링 연동' }, host);
+    // 상단 좌: 4x6 원표, 상단 우: 비격자 자유 조합 2개 타일 + 외딴 1* OFF
+    tx(svg, pad, 14, '비격자 자유 행·열 조합 + 1* 자동 취사선택 (SwiGLU 1단계 atomicAdd = 0)', { class: 'hi', 'font-size': 11 });
+    const g = [
+      [1, 0, 1, 0, 1, 0], // R1: T1{C1,C3,C5}
+      [0, 1, 0, 1, 0, 1], // R2: T2{C2,C4,C6}
+      [1, 0, 1, 0, 2, 0], // R3: T1{C1,C3,C5*} -> 1* 공짜 ON!
+      [2, 1, 0, 1, 0, 1], // R4: T2{C2,C4,C6}, (R4,C1)=1* 외딴 -> 자동 OFF!
+    ];
+    const cs = Math.min(24, Math.floor((W * 0.44 - 30) / 6)), gx0 = pad + 24, gy0 = 32;
+    for (let c = 0; c < 6; c++) tx(svg, gx0 + c * cs + cs / 2, gy0 - 5, 'C' + (c + 1), { 'text-anchor': 'middle', 'font-size': 8.5 });
+    for (let r = 0; r < 4; r++) tx(svg, gx0 - 5, gy0 + r * cs + cs / 2 + 3, 'R' + (r + 1), { 'text-anchor': 'end', class: 'lab', 'font-size': 9.5 });
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 6; c++) {
+        const v = g[r][c], isFreeOn = r === 2 && c === 4, isAutoOff = r === 3 && c === 0;
+        const f = isFreeOn ? C.neg : (isAutoOff ? C.bg : (v === 1 ? C.on : C.off));
+        const stc = isFreeOn ? C.fg : (isAutoOff ? C.line2 : 'none');
+        el('rect', { x: gx0 + c * cs + 1.5, y: gy0 + r * cs + 1.5, width: cs - 3, height: cs - 3, rx: 3, fill: f, stroke: stc, 'stroke-width': isFreeOn ? 1.5 : 1, 'stroke-dasharray': isAutoOff ? '2 2' : '' }, svg);
+        if (isFreeOn) tx(svg, gx0 + c * cs + cs / 2, gy0 + r * cs + cs / 2 + 3, '1*', { 'text-anchor': 'middle', fill: C.bg, 'font-size': 8.5, 'font-weight': 700 });
+        if (isAutoOff) tx(svg, gx0 + c * cs + cs / 2, gy0 + r * cs + cs / 2 + 3, 'OFF', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 6.5, 'font-weight': 600 });
+      }
+    }
+
+    // 화살표 → 오른쪽 비격자 타일 2개
+    const ax1 = gx0 + 6 * cs + 8, ax2 = ax1 + 22, ay = gy0 + 2 * cs;
+    el('line', { x1: ax1, y1: ay, x2: ax2 - 4, y2: ay, stroke: C.on, 'stroke-width': 2 }, svg);
+    el('polygon', { points: `${ax2 - 6},${ay - 4} ${ax2 - 6},${ay + 4} ${ax2},${ay}`, fill: C.on }, svg);
+
+    const rx0 = ax2 + 8, rw = W - rx0 - pad;
+    const drawResBox = (y, title, sub, col, fillSoft) => {
+      el('rect', { x: rx0, y, width: rw, height: 32, rx: 6, fill: fillSoft, stroke: col, 'stroke-width': 1.2 }, svg);
+      tx(svg, rx0 + 8, y + 13, title, { fill: col, 'font-size': 9.5, 'font-weight': 600 });
+      tx(svg, rx0 + 8, y + 25, sub, { class: 'lab', 'font-size': 8.5 });
+    };
+    drawResBox(gy0 - 2, '틀 1: {R1,R3}×{C1,C3,C5}', '6/6 만점 · (R3,C5) 1* 공짜 ON', C.on, C.onsoft);
+    drawResBox(gy0 + 36, '틀 2: {R2,R4}×{C2,C4,C6}', '6/6 만점 · 불필요한 0 = 0칸', C.on, C.onsoft);
+    drawResBox(gy0 + 74, '외딴 (R4,C1) 1* → 자동 OFF', '새 틀 열지 않음 (정확도 99.59%)', C.neg, 'rgba(157,140,255,0.10)');
+
+    // 하단: 실제 B=2,048 5단계 실측 비용 사다리 비중 바
+    const by = 166, barW = W - 2 * pad;
+    tx(svg, pad, by - 4, '실제 모델(배치 2,048) 5단계 GPU 실측 비용 사다리 비중 — 저속 8×16을 0.2%로 소거', { class: 'hi', 'font-size': 10.5 });
+    const segs = [
+      { lbl: '64×32', pct: 38.7, col: C.on },
+      { lbl: '32×32', pct: 38.3, col: '#3eb8cc' },
+      { lbl: '32×16', pct: 20.5, col: C.neg },
+      { lbl: '16×16', pct: 2.4,  col: C.pick },
+      { lbl: '8×16',  pct: 0.2,  col: C.fg3 },
+    ];
+    let cx = pad;
+    segs.forEach(sg => {
+      const sw = Math.max(3, barW * sg.pct / 100.0);
+      el('rect', { x: cx, y: by + 6, width: sw - 1.5, height: 24, rx: 3, fill: sg.col }, svg);
+      if (sw > 48) tx(svg, cx + sw / 2, by + 22, `${sg.lbl} ${sg.pct}%`, { 'text-anchor': 'middle', fill: C.bg, 'font-size': 9.5, 'font-weight': 700 });
+      cx += sw;
+    });
+    tx(svg, pad, by + 46, '1·2순위 고속 틀(64×32 · 32×32) = 77.0%  |  3순위 32×16 = 20.5%  |  4·5순위(16×16 · 8×16) = 2.6%', { class: 'lab', 'font-size': 9.5 });
+    tx(svg, pad, by + 64, '→ 1단계 64×32 커널 효율: cuBLAS의 최대 98.7% · 전체 연산량 19.1%', { fill: C.on, 'font-size': 10, 'font-weight': 600 });
+
+    $('#ct-c1-kpi').innerHTML =
+      `<div class="panel"><div class="k">1·2순위 고속 틀 비중 (B=2,048)</div><div class="v on" style="font-size:15.5px">77.0% <span style="font-size:11.5px;color:var(--fg-3)">(저속 8×16 단 0.2%)</span></div></div>
+       <div class="panel"><div class="k">10,000장 시험 정확도 (1* 연동 후)</div><div class="v" style="font-size:15.5px">90.65% <span style="font-size:11.5px;color:var(--fg-3)">(베이스의 99.59% · 통과)</span></div></div>`;
+  }
+}
+
+function drawC2() {
+  const btns = $('#ct-c2-btns'); btns.innerHTML = '';
+  ['① 구조 비교 (라우터 vs 중심점)', '② 배치 자동 합승 시뮬레이터'].forEach((label, idx) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+    b.textContent = label; b.setAttribute('aria-pressed', st.c2 === idx);
+    b.onclick = () => { st.c2 = idx; drawC2(); };
+    btns.appendChild(b);
+  });
+  $('#ct-c2-cap').textContent = st.c2 === 0 ? '선제 선택 구조 · 겹침 허용 · 합승 가능성 비교' : '배치가 커질수록 기존은 붕괴, 우리는 자동 합승으로 가속';
+
+  const brow = $('#ct-c2-brow');
+  brow.style.display = st.c2 === 1 ? 'flex' : 'none';
+  if (st.c2 === 1) {
+    const bc = $('#ct-c2-bchips'); bc.innerHTML = '';
+    [[1, 'B = 1'], [512, 'B = 512'], [2048, 'B = 2,048'], [8192, 'B = 8,192 (프리필)']].forEach(([val, lbl]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+      b.textContent = lbl; b.setAttribute('aria-pressed', st.c2b === val);
+      b.onclick = () => { st.c2b = val; drawC2(); };
+      bc.appendChild(b);
+    });
+  }
+
+  const host = $('#ct-c2-svg'); host.innerHTML = '';
+  const W = Math.max(340, host.clientWidth || 540), pad = 10;
+
+  if (st.c2 === 0) {
+    const H = 248;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 라우터·예측기 구조와 Roster 중심점 명단 구조 비교' }, host);
+    const rows = [
+      { tag: 'Deja Vu · ShadowLLM', step1: '별도 MLP 예측기', step2: '토큰별 4,096개 산발', out: '배치 합승 0% (붕괴)', col: C.pick, bg: C.bg3 },
+      { tag: 'MoEfication · MoE',   step1: '학습 라우터',     step2: '겹침 없는 고정 전문가', out: '공용 뉴런 공유 제약', col: C.fg2,  bg: C.bg3 },
+      { tag: 'Roster (우리)',       step1: '256 중심점 내적 1회', step2: '겹침 허용 · 가변 K_j', out: '3행렬 선제 스킵 + 자동 합승', col: C.on, bg: C.onsoft },
+    ];
+    const bw = (W - 2 * pad - 24) / 3;
+    rows.forEach((R, i) => {
+      const y = 8 + i * 78;
+      el('rect', { x: pad, y, width: W - 2 * pad, height: 68, rx: 8, fill: R.bg, stroke: i === 2 ? C.on : C.line2, 'stroke-width': i === 2 ? 1.5 : 1 }, svg);
+      tx(svg, pad + 10, y + 18, R.tag, { fill: R.col, 'font-size': 11, 'font-weight': 700 });
+      [R.step1, R.step2, R.out].forEach((txt, k) => {
+        const bx = pad + 8 + k * (bw + 4), by = y + 28;
+        el('rect', { x: bx, y: by, width: bw - 4, height: 30, rx: 5, fill: C.bg, stroke: k === 2 ? R.col : C.line, 'stroke-width': k === 2 ? 1.2 : 0.9 }, svg);
+        tx(svg, bx + (bw - 4) / 2, by + 18.5, txt, { 'text-anchor': 'middle', fill: k === 2 ? R.col : C.fg2, 'font-size': Math.min(9.5, (bw - 10) / 11), 'font-weight': k === 2 ? 600 : 400 });
+      });
+    });
+    $('#ct-c2-kpi').innerHTML =
+      `<div class="panel"><div class="k">별도 예측기 / 라우터 학습</div><div class="v on" style="font-size:15.5px">0개 <span style="font-size:11.5px;color:var(--fg-3)">(중심점 내적 1회 · gate·up·down 스킵)</span></div></div>
+       <div class="panel"><div class="k">뉴런 공유 &amp; 가변 길이</div><div class="v" style="font-size:15.5px">겹침 허용 · 층별 K_j <span style="font-size:11.5px;color:var(--fg-3)">(22% → 1%)</span></div></div>`;
+  } else {
+    const H = 248, bv = st.c2b;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '배치 크기에 따른 기존 합집합 붕괴와 Roster 자동 합승 비교' }, host);
+    const half = (W - 2 * pad - 12) / 2, rx0 = pad + half + 12;
+
+    const meta = {
+      1:    { union: 14, coal: '1명 / 중심점', comp: '13.7%', note: '타일링 불필요 · 직통 GEMV (6.55×)', dens: 1 },
+      512:  { union: 96, coal: '2명 / 중심점', comp: '27.9%', note: '자동 합승 시작 · 실측 1.68 ~ 1.75×', dens: 2 },
+      2048: { union: 100, coal: '8명 / 중심점', comp: '19.1%', note: '1·2순위 77% · 실측 2.56 ~ 2.72×', dens: 4 },
+      8192: { union: 100, coal: '32명 / 중심점', comp: '~14.2%', note: '중심점만으로 0 패딩 ~0% (예상 4~6×)', dens: 6 },
+    }[bv];
+
+    // 좌측: 기존 토큰별 예측 (합집합 붕괴)
+    el('rect', { x: pad, y: 6, width: half, height: 236, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
+    tx(svg, pad + 10, 24, '기존 토큰별 예측 (Deja Vu 등)', { fill: C.pick, 'font-size': 10.5, 'font-weight': 600 });
+    tx(svg, pad + 10, 39, `배치 B = ${nf(bv)} · 토큰마다 패턴 제각각`, { class: 'lab', 'font-size': 9.5 });
+
+    const gRows = 8, gCols = 10, gcs = Math.min(16, Math.floor((half - 24) / gCols));
+    const gxL = pad + (half - gCols * gcs) / 2, gy0 = 50;
+    const seedPat = [
+      [1,0,0,1,0,0,0,1,0,0],[0,1,0,0,1,0,0,0,1,0],[0,0,1,0,0,1,0,0,0,1],[1,0,0,0,1,0,1,0,0,0],
+      [0,1,0,1,0,0,0,1,0,0],[0,0,1,0,0,0,1,0,1,0],[0,1,0,0,0,1,0,0,0,1],[1,0,1,0,0,0,0,1,0,0],
+    ];
+    for (let r = 0; r < gRows; r++) {
+      const showRow = bv === 1 ? r === 0 : true;
+      for (let c = 0; c < gCols; c++) {
+        const on = showRow && seedPat[r][c] === 1;
+        const padZ = showRow && bv > 1 && !on && (bv >= 2048 || (r + c) % 2 === 0);
+        el('rect', { x: gxL + c * gcs + 1, y: gy0 + r * gcs + 1, width: gcs - 2, height: gcs - 2, rx: 2, fill: on ? C.on : (padZ ? C.picksoft : C.bg), opacity: showRow ? 1 : 0.2 }, svg);
+      }
+    }
+    const barY = gy0 + gRows * gcs + 14, barW = half - 20;
+    tx(svg, pad + 10, barY, `배치 합집합 밀도: ${meta.union}%`, { fill: meta.union > 80 ? C.pick : C.fg2, 'font-size': 9.5, 'font-weight': 600 });
+    el('rect', { x: pad + 10, y: barY + 6, width: barW, height: 10, rx: 3, fill: C.bg }, svg);
+    el('rect', { x: pad + 10, y: barY + 6, width: barW * meta.union / 100, height: 10, rx: 3, fill: meta.union > 80 ? C.pick : C.on }, svg);
+    tx(svg, pad + 10, barY + 30, meta.union >= 95 ? '→ 사실상 밀집 연산 (가속 붕괴)' : '→ B=1에서는 희소 (단일만 빠름)', { class: 'lab', 'font-size': 9 });
+
+    // 우측: 유한 중심점 Roster (자동 합승)
+    el('rect', { x: rx0, y: 6, width: half, height: 236, rx: 8, fill: C.bg3, stroke: C.on, 'stroke-width': 1.3 }, svg);
+    tx(svg, rx0 + 10, 24, '유한 중심점 Roster (우리)', { fill: C.on, 'font-size': 10.5, 'font-weight': 700 });
+    tx(svg, rx0 + 10, 39, `평균 합승: ${meta.coal} (256 중심점)`, { class: 'lab', 'font-size': 9.5 });
+
+    const gxR = rx0 + (half - gCols * gcs) / 2;
+    const bandCols = [C.on, C.neg, '#3eb8cc'];
+    for (let r = 0; r < gRows; r++) {
+      const showRow = bv === 1 ? r === 0 : true;
+      const grp = bv >= 8192 ? (r < 4 ? 0 : 1) : (bv >= 2048 ? Math.floor(r / 3) : Math.floor(r / 2) % 3);
+      for (let c = 0; c < gCols; c++) {
+        const blk = (grp === 0 && c < 3) || (grp === 1 && c >= 3 && c < 6) || (grp === 2 && c >= 6 && c < 9);
+        el('rect', { x: gxR + c * gcs + 1, y: gy0 + r * gcs + 1, width: gcs - 2, height: gcs - 2, rx: 2, fill: (showRow && blk) ? bandCols[grp] : C.bg, opacity: showRow ? 0.92 : 0.2 }, svg);
+      }
+    }
+    if (bv >= 512) {
+      const boxH = (bv >= 8192 ? 4 : (bv >= 2048 ? 3 : 2)) * gcs;
+      el('rect', { x: gxR, y: gy0, width: 3 * gcs, height: boxH, rx: 3, fill: 'none', stroke: C.fg, 'stroke-width': 1.4 }, svg);
+    }
+    tx(svg, rx0 + 10, barY, `실제 연산량: ${meta.comp} (0 패딩 최소화)`, { fill: C.on, 'font-size': 9.5, 'font-weight': 600 });
+    const compNum = parseFloat(meta.comp.replace('~', ''));
+    el('rect', { x: rx0 + 10, y: barY + 6, width: barW, height: 10, rx: 3, fill: C.bg }, svg);
+    el('rect', { x: rx0 + 10, y: barY + 6, width: barW * compNum / 100, height: 10, rx: 3, fill: C.on }, svg);
+    tx(svg, rx0 + 10, barY + 30, '→ ' + meta.note, { fill: C.on, 'font-size': 9 });
+
+    $('#ct-c2-kpi').innerHTML =
+      `<div class="panel"><div class="k">배치 B = ${nf(bv)} 평균 합승 인원</div><div class="v on" style="font-size:15.5px">${meta.coal} <span style="font-size:11.5px;color:var(--fg-3)">(출력 100% 동일)</span></div></div>
+       <div class="panel"><div class="k">기존 vs 우리 연산량</div><div class="v" style="font-size:15.5px">기존 ${meta.union}% → <b style="color:var(--on)">우리 ${meta.comp}</b></div></div>`;
+  }
+}
+
+function drawC3() {
+  const H1 = B.hw_bench['1024'], H4 = B.hw_bench['4096'];
+  const host = $('#ct-c3-svg'); host.innerHTML = '';
+  const W = Math.max(340, host.clientWidth || 540), H = 258, pad = 10;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '단일 요청과 대형 서버 두 환경의 파이프라인 및 실측 가속 비교' }, host);
+
+  // 상단: 단일 요청 (B=1) 직통 경로
+  el('rect', { x: pad, y: 8, width: W - 2 * pad, height: 112, rx: 8, fill: 'rgba(157,140,255,0.08)', stroke: C.neg, 'stroke-width': 1.2 }, svg);
+  tx(svg, pad + 12, 27, '① 단일 요청 환경 (B = 1 · 로컬/개인 LLM) — 타일링 불필요 · 0 패딩 0%', { fill: C.neg, 'font-size': 11, 'font-weight': 700 });
+  const bw = (W - 2 * pad - 32) / 3;
+  const drawFlow = (y, steps, col) => {
+    steps.forEach(([t1, t2], k) => {
+      const bx = pad + 10 + k * (bw + 6);
+      el('rect', { x: bx, y, width: bw, height: 42, rx: 6, fill: C.bg, stroke: k === 2 ? col : C.line2, 'stroke-width': k === 2 ? 1.5 : 1 }, svg);
+      tx(svg, bx + bw / 2, y + 17, t1, { 'text-anchor': 'middle', fill: k === 2 ? col : C.fg, 'font-size': 10, 'font-weight': 600 });
+      tx(svg, bx + bw / 2, y + 32, t2, { 'text-anchor': 'middle', class: 'lab', 'font-size': 8.8 });
+    });
+  };
+  drawFlow(38, [
+    ['토큰 1개 → 중심점 내적', '활성 뉴런 13.7% 확정'],
+    ['벡터화 bf16 GEMV', '활성 열만 DRAM 직통 로드'],
+    [`실측 ${H1.b1.speedup.toFixed(2)}× / ${H4.b1.speedup.toFixed(2)}×`, 'd=1,024 / d=4,096 · 정확도 99.63%'],
+  ], C.neg);
+  tx(svg, pad + 12, 104, '0 마스킹 대조군: 1.00× (가속 0%)  |  우리 전용 커널: 이론 한계(6.85×)의 95.6% 달성', { class: 'lab', 'font-size': 9.5 });
+
+  // 하단: 대형 서버 (B=512~2,048) 5단계 + 스트립 경로
+  el('rect', { x: pad, y: 132, width: W - 2 * pad, height: 118, rx: 8, fill: C.onsoft, stroke: C.on, 'stroke-width': 1.2 }, svg);
+  tx(svg, pad + 12, 151, '② 실제 서버 환경 (B = 512 ~ 2,048 · Chunked Prefill) — 합집합 83% 벽 돌파', { fill: C.on, 'font-size': 11, 'font-weight': 700 });
+  drawFlow(162, [
+    ['자동 합승 + 1* 자유도', '행 압축 · 외딴 1* 자동 OFF'],
+    ['5단계 Roster-Tile + 스트립', '64×32~8×16 · L2 중복 읽기 0%'],
+    [`실측 ${H1.rows[2].best_speedup.toFixed(2)}× / ${H4.rows[2].best_speedup.toFixed(2)}×`, 'B=2,048 (d=1,024/4,096) · 99.59%'],
+  ], C.on);
+  tx(svg, pad + 12, 232, '0 마스킹 대조군: 1.00 ~ 1.05×  |  기존 문맥적 희소성: 대형 배치 붕괴 또는 FFN 포기', { class: 'lab', 'font-size': 9.5 });
+
+  $('#ct-c3-kpi').innerHTML =
+    `<div class="panel"><div class="k">단일 요청 (B=1 · RTX 4060 실측)</div><div class="v neg" style="font-size:15.5px">${H1.b1.speedup.toFixed(2)}× · ${H4.b1.speedup.toFixed(2)}× <span style="font-size:11.5px;color:var(--fg-3)">(정확도 99.63%)</span></div></div>
+     <div class="panel"><div class="k">실제 서버 (B=2,048 · RTX 4060 실측)</div><div class="v on" style="font-size:15.5px">${H1.rows[2].best_speedup.toFixed(2)}× · ${H4.rows[2].best_speedup.toFixed(2)}× <span style="font-size:11.5px;color:var(--fg-3)">(정확도 99.59%)</span></div></div>`;
+
+  // 선행 연구 대비 한눈 비교 매트릭스 (짧은 기호 + 핵심 키워드, 줄글 제거)
+  const cmpRows = [
+    ['Deja Vu · ShadowLLM',       'warn', '× (MLP 예측기)', 'ok', '○', 'warn', '×', 'warn', '× (합집합 붕괴)', 'B=1 · 소배치 중심'],
+    ['PowerInfer · TurboSparse',  'mut',  '△ (dReLU/예측)', 'mut', '△', 'warn', '×', 'warn', '× (로컬 전용)',   '단일 요청 CPU·GPU 오프로드'],
+    ['CATS · TEAL',               'ok',   '○ (임계값)',     'warn', '× (gate 계산)', 'warn', '×', 'mut', '△ (소·중배치)', '학습 불필요 · up/down 스킵'],
+    ['Polar Sparsity',            'mut',  '△ (경량 라우터)', 'warn', '× (FFN 포기)', 'warn', '×', 'warn', '× (어텐션 우회)', '대형 배치는 어텐션만 희소화'],
+    ['PIT · TileSpMM',            'mut',  '— (커널 계층)',  'mut', '—', 'warn', '× (고정 1)', 'mut', '△ (정적/마이크로)', '비격자 Gather · 가변 SpMM'],
+    ['Roster + Roster-Tile (우리)', 'ok', '○ (중심점 1회)', 'ok', '○ (3행렬 전부)', 'ok', '○ (공짜 ON/OFF)', 'ok', '○ (실측 최대 2.72×)', '단일 6.55× · 서버 2.72× (bf16)'],
+  ];
+  $('#ct-cmp-tbl').innerHTML =
+    '<tr><th>연구 / 기법</th><th>라우터·예측기 없음</th><th>3행렬 선제 스킵</th><th>1* Don\'t-Care 타일링</th><th>대형 배치 FFN 가속</th><th>핵심 특징</th></tr>' +
+    cmpRows.map((r, i) => `<tr${i === cmpRows.length - 1 ? ' class="sum"' : ''}>
+      <td><b>${r[0]}</b></td>
+      <td class="${r[1]}">${r[2]}</td>
+      <td class="${r[3]}">${r[4]}</td>
+      <td class="${r[5]}">${r[6]}</td>
+      <td class="${r[7]}">${r[8]}</td>
+      <td class="${i === cmpRows.length - 1 ? 'ok' : 'mut'}">${r[9]}</td>
+    </tr>`).join('');
+}
+
 // ---- 보기 전환 (기존 버튼에 동작을 덧붙인다) ----
 function drawAll() { drawProb(); drawJoint(); drawLayerStats(); drawCache(); drawFinal(); drawHwBench(); }
-function show() {
-  ['tab-train', 'tab-infer'].forEach(id => $('#' + id).setAttribute('aria-pressed', 'false'));
+function drawContrib() { drawC1(); drawC2(); drawC3(); }
+function showBatch() {
+  ['tab-train', 'tab-infer', 'tab-contrib'].forEach(id => $('#' + id).setAttribute('aria-pressed', 'false'));
   $('#tab-batch').setAttribute('aria-pressed', 'true');
-  $('#view-train').hidden = true; $('#view-infer').hidden = true; $('#view-batch').hidden = false;
+  $('#view-train').hidden = true; $('#view-infer').hidden = true; $('#view-contrib').hidden = true; $('#view-batch').hidden = false;
   drawAll();
   try { history.replaceState(null, '', '#batch'); } catch (e) { location.hash = 'batch'; }
 }
-function hide() { $('#tab-batch').setAttribute('aria-pressed', 'false'); $('#view-batch').hidden = true; }
+function showContrib() {
+  ['tab-train', 'tab-infer', 'tab-batch'].forEach(id => $('#' + id).setAttribute('aria-pressed', 'false'));
+  $('#tab-contrib').setAttribute('aria-pressed', 'true');
+  $('#view-train').hidden = true; $('#view-infer').hidden = true; $('#view-batch').hidden = true; $('#view-contrib').hidden = false;
+  drawContrib();
+  try { history.replaceState(null, '', '#contrib'); } catch (e) { location.hash = 'contrib'; }
+}
+function hideCustom() {
+  $('#tab-batch').setAttribute('aria-pressed', 'false'); $('#view-batch').hidden = true;
+  $('#tab-contrib').setAttribute('aria-pressed', 'false'); $('#view-contrib').hidden = true;
+}
 function init() {
   ['--bg', '--bg-2', '--bg-3', '--off', '--on', '--on-soft', '--pick', '--pick-soft', '--neg', '--fg', '--fg-2', '--fg-3', '--line', '--line-2']
     .forEach(n => C[n.slice(2).replace(/-/g, '')] = css(n));
-  $('#tab-batch').addEventListener('click', show);
-  $('#tab-train').addEventListener('click', hide); $('#tab-infer').addEventListener('click', hide);
+  $('#tab-batch').addEventListener('click', showBatch);
+  $('#tab-contrib').addEventListener('click', showContrib);
+  $('#tab-train').addEventListener('click', hideCustom); $('#tab-infer').addEventListener('click', hideCustom);
   $('#bt-prev').onclick = () => { st.step = Math.max(0, st.step - 1); drawJoint(); };
   $('#bt-next').onclick = () => { st.step = Math.min(J_STEPS.length - 1, st.step + 1); drawJoint(); };
-  let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => { if (!$('#view-batch').hidden) drawAll(); }, 160); }).observe(document.body);
-  if (window.__HASH0__ === '#batch') show();
+  let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => { if (!$('#view-batch').hidden) drawAll(); if (!$('#view-contrib').hidden) drawContrib(); }, 160); }).observe(document.body);
+  if (window.__HASH0__ === '#batch') showBatch();
+  else if (window.__HASH0__ === '#contrib') showContrib();
 }
 (function wait(t0) {
   const ld = $('#loading');
