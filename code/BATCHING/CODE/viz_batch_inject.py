@@ -35,9 +35,10 @@ VIEW = MS + r'''
   .bt-intro p { color: var(--fg-2); margin-top: 10px; max-width: 52em; }
   .bt-intro .stats { margin-top: 18px; }
   .bt-svg svg { display: block; width: 100%; height: auto; }
-  .bt-svg text { font-family: var(--mono); font-size: 11px; fill: var(--fg-3); }
+  .bt-svg text { font-family: "IBM Plex Mono", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; font-size: 11px; fill: var(--fg-3); font-variant-numeric: tabular-nums; }
   .bt-svg .lab { fill: var(--fg-2); font-size: 11.5px; }
   .bt-svg .hi { fill: var(--fg); font-size: 12px; font-weight: 500; }
+  #view-contrib .bt-svg text { font-family: var(--sans); }
   .bt-steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .bt-steps .where { font-size: 13px; color: var(--fg-2); flex: 1; min-width: 12em; }
   .bt-steps .where b { color: var(--pick); font-weight: 500; }
@@ -405,7 +406,14 @@ const C = {};
 const st = { p1: 1, step: 0, batch: '2048', cache: 2, strip: 0, c1: 2, c1c: 0, c2: 1, c2b: 2048 };
 const nf = v => Number(v).toLocaleString('ko-KR');
 function el(t, a = {}, p) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
-function tx(p, x, y, s, a = {}) { const t = el('text', Object.assign({ x, y }, a), p); t.textContent = s; return t; }
+function tx(p, x, y, s, a = {}) {
+  const t = el('text', Object.assign({ x, y }, a), p);
+  if (a['font-size'] != null) t.style.fontSize = a['font-size'] + 'px';
+  if (a.fill != null) t.style.fill = a.fill;
+  if (a['font-weight'] != null) t.style.fontWeight = a['font-weight'];
+  t.textContent = s;
+  return t;
+}
 
 // ---- 묶기 1: 문제 상황 (6행 x 12열, ① 원래 표 / ② 순서대로 2x3 / ③ 기존 SpMM 최적 1D 재배열) ----
 const P1_ROWS = ['T1 가', 'T2 나', 'T3 다', 'T4 라', 'T5 마', 'T6 바'];
@@ -515,7 +523,7 @@ function drawProb() {
   }
   $('#bt-p1-kpi').innerHTML = st.p1 === 2
     ? `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
-       <div class="panel"><div class="k">최적 1D SpMM (2×3 × 8틀 · 빈 4틀 생략)</div><div class="v pick">불필요한 0이 24칸 (50.0%) <span style="font-size:11.5px;color:var(--fg-3)">가로 격자 한계</span></div></div>`
+       <div class="panel"><div class="k">최적 1D SpMM (2×3 × 8틀 · 빈 4틀 생략)</div><div class="v pick">불필요한 0이 24칸 (50.0%)</div></div>`
     : st.p1 === 1
       ? `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
          <div class="panel"><div class="k">순서대로 틀 끼운 결과 (2×3 × 12틀)</div><div class="v pick">불필요한 0이 48칸 (66.7%)</div></div>`
@@ -1043,14 +1051,15 @@ function drawC1() {
   const W = Math.max(340, host.clientWidth || 540), pad = 12;
 
   if (st.c1 === 0) {
-    const H = 250;
+    const H = 266;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 정적 앞쪽 몰기 및 고정 1 타일링 한계' }, host);
+    const hdrFs = W < 470 ? 9.8 : 11;
     // 상단: MatFormer 전역 정적 앞쪽 몰기
-    el('rect', { x: pad, y: 8, width: W - 2 * pad, height: 108, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
-    tx(svg, pad + 12, 26, '기존 ① MatFormer (전역 정적 앞쪽 몰기) — 모든 입력이 똑같은 앞쪽 뉴런만 공유', { class: 'hi', 'font-size': 11 });
-    const cw = Math.min(28, (W - 2 * pad - 110) / 10), sx0 = pad + 88;
+    el('rect', { x: pad, y: 8, width: W - 2 * pad, height: 128, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
+    tx(svg, pad + 12, 26, '기존 ① MatFormer (전역 정적 앞쪽 몰기) — 모든 입력이 같은 앞쪽 뉴런만 공유', { class: 'hi', 'font-size': hdrFs });
+    const sx0 = pad + 72, cw = Math.min(28, (W - 2 * pad - 88) / 10);
     ['중심점 A', '중심점 B', '중심점 C'].forEach((lbl, r) => {
-      const y = 36 + r * 24;
+      const y = 38 + r * 24;
       tx(svg, sx0 - 8, y + 13, lbl, { 'text-anchor': 'end', class: 'lab', 'font-size': 10 });
       for (let c = 0; c < 10; c++) {
         const inFix = c < 4;
@@ -1058,16 +1067,18 @@ function drawC1() {
         const f = inFix ? C.onsoft : (miss ? C.picksoft : C.bg);
         const stc = inFix ? C.on : (miss ? C.pick : C.line);
         el('rect', { x: sx0 + c * (cw + 2), y, width: cw, height: 18, rx: 3, fill: f, stroke: stc, 'stroke-width': 1 }, svg);
-        if (miss) tx(svg, sx0 + c * (cw + 2) + cw / 2, y + 12.5, '누락', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 8, 'font-weight': 600 });
-        else if (inFix && r === 0) tx(svg, sx0 + c * (cw + 2) + cw / 2, y + 12.5, 'N' + (c + 1), { 'text-anchor': 'middle', fill: C.on, 'font-size': 8.5 });
+        if (miss) tx(svg, sx0 + c * (cw + 2) + cw / 2, y + 12.5, '누락', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 8.5, 'font-weight': 600 });
+        else if (inFix && r === 0) tx(svg, sx0 + c * (cw + 2) + cw / 2, y + 12.5, 'N' + (c + 1), { 'text-anchor': 'middle', fill: C.on, 'font-size': 9, 'font-weight': 600 });
       }
     });
-    tx(svg, sx0 + 4 * (cw + 2) + 8, 108, '← 전역 앞 4개 고정: 문맥별 핵심 뉴런을 못 고름', { fill: C.pick, 'font-size': 9.5 });
+    const fixEnd = sx0 + 4 * (cw + 2) - 2;
+    el('path', { d: `M ${sx0} 107 L ${sx0} 111 L ${fixEnd} 111 L ${fixEnd} 107`, fill: 'none', stroke: C.on, 'stroke-width': 1.2 }, svg);
+    tx(svg, sx0, 126, '↑ 앞 4개(N1~N4) 전역 고정: 중심점 B·C의 핵심 뉴런 누락', { fill: C.pick, 'font-size': 9.8, 'font-weight': 500 });
 
     // 하단: 고정 1 제약 타일링 (PIT / TileSpMM 등)
-    el('rect', { x: pad, y: 128, width: W - 2 * pad, height: 112, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
-    tx(svg, pad + 12, 146, '기존 ② 고정 1 타일링 (PIT · TileSpMM) — 외딴 1 하나도 절대 못 끔', { class: 'hi', 'font-size': 11 });
-    const gcs = Math.min(26, (W - 2 * pad - 180) / 6), gx0 = pad + 16, gy0 = 158;
+    el('rect', { x: pad, y: 146, width: W - 2 * pad, height: 112, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
+    tx(svg, pad + 12, 165, '기존 ② 고정 1 타일링 (PIT · TileSpMM) — 외딴 1 하나도 절대 못 끔', { class: 'hi', 'font-size': hdrFs });
+    const gcs = Math.min(26, (W - 2 * pad - 186) / 6), gx0 = pad + 16, gy0 = 178;
     const mg = [[1, 0, 1, 0, 1, 0], [0, 0, 0, 0, 0, 1]];
     for (let r = 0; r < 2; r++) {
       for (let c = 0; c < 6; c++) {
@@ -1080,33 +1091,32 @@ function drawC1() {
     }
     el('rect', { x: gx0 + 3 * gcs, y: gy0 + gcs, width: 3 * gcs, height: gcs, rx: 4, fill: 'none', stroke: C.pick, 'stroke-width': 1.8, 'stroke-dasharray': '4 2' }, svg);
     const txX = gx0 + 6 * gcs + 14;
-    tx(svg, txX, gy0 + 18, '외딴 1 (끝쪽 10%)', { fill: C.pick, 'font-size': 10.5, 'font-weight': 600 });
-    tx(svg, txX, gy0 + 35, '→ 새 저속 틀 강제 오픈', { class: 'lab', 'font-size': 10 });
-    tx(svg, txX, gy0 + 50, '→ 불필요한 ×0 대량 발생', { class: 'lab', 'font-size': 10 });
+    tx(svg, txX, gy0 + 14, '외딴 1 (끝쪽 10%)', { fill: C.pick, 'font-size': 10.5, 'font-weight': 600 });
+    tx(svg, txX, gy0 + 31, '→ 새 저속 틀 강제 오픈', { class: 'lab', 'font-size': 10 });
+    tx(svg, txX, gy0 + 47, '→ 불필요한 ×0 대량 발생', { class: 'lab', 'font-size': 10 });
 
     $('#ct-c1-kpi').innerHTML =
       `<div class="panel"><div class="k">기존 정적 앞쪽 몰기 (MatFormer)</div><div class="v pick" style="font-size:15px">문맥별 뉴런 특화 불가</div></div>
        <div class="panel"><div class="k">기존 고정 1 타일링</div><div class="v pick" style="font-size:15px">외딴 꼬리 1 때문에 0 패딩 증가</div></div>`;
   } else if (st.c1 === 1) {
-    const H = 248, cur = C1_CENTROIDS[st.c1c];
+    const H = 258, cur = C1_CENTROIDS[st.c1c];
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '중심점별 앞쪽 몰기 학습 압력으로 1* 자유도 생성' }, host);
     const bw = (W - 2 * pad - 11 * 4) / 12, barMax = 52;
 
-    tx(svg, pad, 15, `${cur.name} · 학습 전 (중요도가 12개 뉴런 전체에 산발 분포)`, { class: 'hi', 'font-size': 11 });
+    tx(svg, pad, 16, `${cur.name} · 학습 전 (중요도가 12개 뉴런 전체에 산발 분포)`, { class: 'hi', 'font-size': 11 });
     cur.raw.forEach((v, i) => {
       const x = pad + i * (bw + 4), bh = Math.max(4, v * barMax), y = 78 - bh;
       const isTop = cur.top.includes(i), isOpt = i === cur.opt;
       el('rect', { x, y, width: bw, height: bh, rx: 3, fill: isTop ? C.on : (isOpt ? C.neg : C.off), opacity: isTop ? 0.9 : 0.7 }, svg);
-      tx(svg, x + bw / 2, 92, 'N' + (i + 1), { 'text-anchor': 'middle', 'font-size': 8.5, fill: isTop ? C.on : C.fg3 });
+      tx(svg, x + bw / 2, 92, 'N' + (i + 1), { 'text-anchor': 'middle', 'font-size': 9, fill: isTop ? C.on : (isOpt ? C.neg : C.fg3) });
     });
 
-    // 화살표: 앞쪽 몰기 압력
-    const midX = W / 2;
-    el('line', { x1: midX, y1: 100, x2: midX, y2: 122, stroke: C.on, 'stroke-width': 2 }, svg);
-    el('polygon', { points: `${midX - 5},118 ${midX + 5},118 ${midX},126`, fill: C.on }, svg);
-    tx(svg, midX + 10, 116, '중심점별 고유 순위로 앞쪽 몰기 손실 압력 적용', { fill: C.on, 'font-size': 10.5, 'font-weight': 600 });
+    // 중앙 정렬 배지: 앞쪽 몰기 압력
+    const pillW = Math.min(W - 2 * pad, 290), pillX = (W - pillW) / 2;
+    el('rect', { x: pillX, y: 102, width: pillW, height: 22, rx: 11, fill: C.onsoft, stroke: C.on, 'stroke-width': 1 }, svg);
+    tx(svg, W / 2, 117, '↓ 중심점별 고유 순위로 앞쪽 몰기 학습 압력 적용', { 'text-anchor': 'middle', fill: C.on, 'font-size': 10.2, 'font-weight': 600 });
 
-    tx(svg, pad, 144, `${cur.name} · 학습 후 (고유 앞쪽 4개 필수 1 + 끝쪽 10% 1* Don't-Care)`, { class: 'hi', 'font-size': 11 });
+    tx(svg, pad, 146, `${cur.name} · 학습 후 (고유 앞쪽 4개 필수 1 + 끝쪽 10% 1* Don't-Care)`, { class: 'hi', 'font-size': 11 });
     const rest = Array.from({ length: 12 }, (_, i) => i).filter(i => !cur.top.includes(i) && i !== cur.opt);
     const ordered = [...cur.top, cur.opt, ...rest];
     ordered.forEach((nid, pos) => {
@@ -1116,31 +1126,35 @@ function drawC1() {
       const y = 208 - h;
       const fill = isMand ? C.on : (isOpt ? C.neg : C.bg3);
       el('rect', { x, y, width: bw, height: h, rx: 3, fill, stroke: isOpt ? C.fg : 'none', 'stroke-width': isOpt ? 1.2 : 0, 'stroke-dasharray': isOpt ? '3 2' : '' }, svg);
-      tx(svg, x + bw / 2, 222, 'N' + (nid + 1), { 'text-anchor': 'middle', 'font-size': 8.5, fill: isMand ? C.on : (isOpt ? C.neg : C.fg3), 'font-weight': isMand || isOpt ? 600 : 400 });
+      tx(svg, x + bw / 2, 222, 'N' + (nid + 1), { 'text-anchor': 'middle', 'font-size': 9, fill: isMand ? C.on : (isOpt ? C.neg : C.fg3), 'font-weight': isMand || isOpt ? 600 : 400 });
     });
     // 영역 브래킷 라벨
     const xMandEnd = pad + 4 * (bw + 4) - 4;
     const xOptX = pad + 4 * (bw + 4);
-    el('line', { x1: pad, x2: xMandEnd, y1: 230, y2: 230, stroke: C.on, 'stroke-width': 1.5 }, svg);
-    tx(svg, (pad + xMandEnd) / 2, 243, '필수 1 (90%)', { 'text-anchor': 'middle', fill: C.on, 'font-size': 9.5, 'font-weight': 600 });
-    tx(svg, xOptX + bw / 2, 243, '1* (10%)', { 'text-anchor': 'middle', fill: C.neg, 'font-size': 9.5, 'font-weight': 600 });
-    tx(svg, (xOptX + bw + 8 + W - pad) / 2, 243, '완전 OFF (0 · 계산 안 함)', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 9.5 });
+    const xOffStart = pad + 5 * (bw + 4);
+    el('line', { x1: pad, x2: xMandEnd, y1: 232, y2: 232, stroke: C.on, 'stroke-width': 1.5 }, svg);
+    el('line', { x1: xOptX, x2: xOptX + bw, y1: 232, y2: 232, stroke: C.neg, 'stroke-width': 1.5 }, svg);
+    el('line', { x1: xOffStart, x2: W - pad, y1: 232, y2: 232, stroke: C.line2, 'stroke-width': 1.2 }, svg);
+    tx(svg, (pad + xMandEnd) / 2, 247, '필수 1 (90%)', { 'text-anchor': 'middle', fill: C.on, 'font-size': 9.8, 'font-weight': 600 });
+    tx(svg, xOptX + bw / 2, 247, '1* (10%)', { 'text-anchor': 'middle', fill: C.neg, 'font-size': 9.5, 'font-weight': 600 });
+    tx(svg, (xOffStart + W - pad) / 2, 247, '완전 OFF (0 · 계산 안 함)', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 9.5 });
 
     $('#ct-c1-kpi').innerHTML =
       `<div class="panel"><div class="k">${cur.name} 필수 명단 (90%)</div><div class="v on" style="font-size:15px">${cur.top.map(i => 'N' + (i + 1)).join(' · ')}</div></div>
        <div class="panel"><div class="k">유연한 버퍼 1* (끝쪽 10%)</div><div class="v neg" style="font-size:15px">N${cur.opt + 1}* <span style="font-size:11.5px;color:var(--fg-3)">(타일 사정에 따라 ON/OFF)</span></div></div>`;
   } else {
-    const H = 262;
+    const H = 256;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '1* Don\'t-Care와 비격자 5단계 타일 커버링 연동' }, host);
+    const hdrFs = W < 470 ? 9.8 : 11;
     // 상단 좌: 4x6 원표, 상단 우: 비격자 자유 조합 2개 타일 + 외딴 1* OFF
-    tx(svg, pad, 14, '비격자 자유 행·열 조합 + 1* 자동 취사선택 (SwiGLU 1단계 atomicAdd = 0)', { class: 'hi', 'font-size': 11 });
+    tx(svg, pad, 15, '비격자 자유 행·열 조합 + 1* 자동 취사선택 (SwiGLU atomicAdd = 0)', { class: 'hi', 'font-size': hdrFs });
     const g = [
       [1, 0, 1, 0, 1, 0], // R1: T1{C1,C3,C5}
       [0, 1, 0, 1, 0, 1], // R2: T2{C2,C4,C6}
       [1, 0, 1, 0, 2, 0], // R3: T1{C1,C3,C5*} -> 1* 공짜 ON!
       [2, 1, 0, 1, 0, 1], // R4: T2{C2,C4,C6}, (R4,C1)=1* 외딴 -> 자동 OFF!
     ];
-    const cs = Math.min(24, Math.floor((W * 0.44 - 30) / 6)), gx0 = pad + 24, gy0 = 32;
+    const cs = Math.min(24, Math.floor((W * 0.42 - 26) / 6)), gx0 = pad + 24, gy0 = 34;
     for (let c = 0; c < 6; c++) tx(svg, gx0 + c * cs + cs / 2, gy0 - 5, 'C' + (c + 1), { 'text-anchor': 'middle', 'font-size': 8.5 });
     for (let r = 0; r < 4; r++) tx(svg, gx0 - 5, gy0 + r * cs + cs / 2 + 3, 'R' + (r + 1), { 'text-anchor': 'end', class: 'lab', 'font-size': 9.5 });
     for (let r = 0; r < 4; r++) {
@@ -1150,28 +1164,28 @@ function drawC1() {
         const stc = isFreeOn ? C.fg : (isAutoOff ? C.line2 : 'none');
         el('rect', { x: gx0 + c * cs + 1.5, y: gy0 + r * cs + 1.5, width: cs - 3, height: cs - 3, rx: 3, fill: f, stroke: stc, 'stroke-width': isFreeOn ? 1.5 : 1, 'stroke-dasharray': isAutoOff ? '2 2' : '' }, svg);
         if (isFreeOn) tx(svg, gx0 + c * cs + cs / 2, gy0 + r * cs + cs / 2 + 3, '1*', { 'text-anchor': 'middle', fill: C.bg, 'font-size': 8.5, 'font-weight': 700 });
-        if (isAutoOff) tx(svg, gx0 + c * cs + cs / 2, gy0 + r * cs + cs / 2 + 3, 'OFF', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 6.5, 'font-weight': 600 });
+        if (isAutoOff) tx(svg, gx0 + c * cs + cs / 2, gy0 + r * cs + cs / 2 + 3, 'OFF', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 7, 'font-weight': 600 });
       }
     }
 
     // 화살표 → 오른쪽 비격자 타일 2개
-    const ax1 = gx0 + 6 * cs + 8, ax2 = ax1 + 22, ay = gy0 + 2 * cs;
+    const ax1 = gx0 + 6 * cs + 6, ax2 = ax1 + 18, ay = gy0 + 2 * cs;
     el('line', { x1: ax1, y1: ay, x2: ax2 - 4, y2: ay, stroke: C.on, 'stroke-width': 2 }, svg);
     el('polygon', { points: `${ax2 - 6},${ay - 4} ${ax2 - 6},${ay + 4} ${ax2},${ay}`, fill: C.on }, svg);
 
-    const rx0 = ax2 + 8, rw = W - rx0 - pad;
+    const rx0 = ax2 + 6, rw = W - rx0 - pad;
     const drawResBox = (y, title, sub, col, fillSoft) => {
       el('rect', { x: rx0, y, width: rw, height: 32, rx: 6, fill: fillSoft, stroke: col, 'stroke-width': 1.2 }, svg);
-      tx(svg, rx0 + 8, y + 13, title, { fill: col, 'font-size': 9.5, 'font-weight': 600 });
-      tx(svg, rx0 + 8, y + 25, sub, { class: 'lab', 'font-size': 8.5 });
+      tx(svg, rx0 + 8, y + 13.5, title, { fill: col, 'font-size': 9.8, 'font-weight': 600 });
+      tx(svg, rx0 + 8, y + 26, sub, { class: 'lab', 'font-size': 9 });
     };
     drawResBox(gy0 - 2, '틀 1: {R1,R3}×{C1,C3,C5}', '6/6 만점 · (R3,C5) 1* 공짜 ON', C.on, C.onsoft);
     drawResBox(gy0 + 36, '틀 2: {R2,R4}×{C2,C4,C6}', '6/6 만점 · 불필요한 0 = 0칸', C.on, C.onsoft);
     drawResBox(gy0 + 74, '외딴 (R4,C1) 1* → 자동 OFF', '새 틀 열지 않음 (정확도 99.59%)', C.neg, 'rgba(157,140,255,0.10)');
 
     // 하단: 실제 B=2,048 5단계 실측 비용 사다리 비중 바
-    const by = 166, barW = W - 2 * pad;
-    tx(svg, pad, by - 4, '실제 모델(배치 2,048) 5단계 GPU 실측 비용 사다리 비중 — 저속 8×16을 0.2%로 소거', { class: 'hi', 'font-size': 10.5 });
+    const by = 172, barW = W - 2 * pad;
+    tx(svg, pad, by - 8, '실제 모델(배치 2,048) 5단계 실측 비용 비중 — 저속 8×16을 0.2%로 소거', { class: 'hi', 'font-size': W < 470 ? 9.5 : 10.5 });
     const segs = [
       { lbl: '64×32', pct: 38.7, col: C.on },
       { lbl: '32×32', pct: 38.3, col: '#3eb8cc' },
@@ -1182,11 +1196,11 @@ function drawC1() {
     let cx = pad;
     segs.forEach(sg => {
       const sw = Math.max(3, barW * sg.pct / 100.0);
-      el('rect', { x: cx, y: by + 6, width: sw - 1.5, height: 24, rx: 3, fill: sg.col }, svg);
-      if (sw > 48) tx(svg, cx + sw / 2, by + 22, `${sg.lbl} ${sg.pct}%`, { 'text-anchor': 'middle', fill: C.bg, 'font-size': 9.5, 'font-weight': 700 });
+      el('rect', { x: cx, y: by + 2, width: sw - 1.5, height: 24, rx: 3, fill: sg.col }, svg);
+      if (sw > 52) tx(svg, cx + sw / 2, by + 18, `${sg.lbl} (${sg.pct}%)`, { 'text-anchor': 'middle', fill: C.bg, 'font-size': 9.5, 'font-weight': 700 });
       cx += sw;
     });
-    tx(svg, pad, by + 46, '1·2순위 고속 틀(64×32 · 32×32) = 77.0%  |  3순위 32×16 = 20.5%  |  4·5순위(16×16 · 8×16) = 2.6%', { class: 'lab', 'font-size': 9.5 });
+    tx(svg, pad, by + 44, '1·2순위(64×32 · 32×32) 77.0%  |  3순위(32×16) 20.5%  |  4·5순위 2.6%', { class: 'lab', 'font-size': W < 470 ? 9 : 9.8 });
     tx(svg, pad, by + 64, '→ 1단계 64×32 커널 효율: cuBLAS의 최대 98.7% · 전체 연산량 19.1%', { fill: C.on, 'font-size': 10, 'font-weight': 600 });
 
     $('#ct-c1-kpi').innerHTML =
@@ -1221,46 +1235,47 @@ function drawC2() {
   const W = Math.max(340, host.clientWidth || 540), pad = 10;
 
   if (st.c2 === 0) {
-    const H = 248;
+    const H = 250;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 라우터·예측기 구조와 Roster 중심점 명단 구조 비교' }, host);
     const rows = [
-      { tag: 'Deja Vu · ShadowLLM', step1: '별도 MLP 예측기', step2: '토큰별 4,096개 산발', out: '배치 합승 0% (붕괴)', col: C.pick, bg: C.bg3 },
+      { tag: 'Deja Vu · ShadowLLM', step1: '별도 MLP 예측기', step2: '토큰별 산발 예측', out: '배치 합승 0% (붕괴)', col: C.pick, bg: C.bg3 },
       { tag: 'MoEfication · MoE',   step1: '학습 라우터',     step2: '겹침 없는 고정 전문가', out: '공용 뉴런 공유 제약', col: C.fg2,  bg: C.bg3 },
-      { tag: 'Roster (우리)',       step1: '256 중심점 내적 1회', step2: '겹침 허용 · 가변 K_j', out: '3행렬 선제 스킵 + 자동 합승', col: C.on, bg: C.onsoft },
+      { tag: 'Roster (우리)',       step1: '256 중심점 내적 1회', step2: '겹침 허용 · 가변 K_j', out: '3행렬 스킵 + 자동 합승', col: C.on, bg: C.onsoft },
     ];
-    const bw = (W - 2 * pad - 24) / 3;
+    const gap = 14, innerW = W - 2 * pad - 20, bw = (innerW - 2 * gap) / 3;
     rows.forEach((R, i) => {
-      const y = 8 + i * 78;
-      el('rect', { x: pad, y, width: W - 2 * pad, height: 68, rx: 8, fill: R.bg, stroke: i === 2 ? C.on : C.line2, 'stroke-width': i === 2 ? 1.5 : 1 }, svg);
-      tx(svg, pad + 10, y + 18, R.tag, { fill: R.col, 'font-size': 11, 'font-weight': 700 });
+      const y = 8 + i * 79;
+      el('rect', { x: pad, y, width: W - 2 * pad, height: 70, rx: 8, fill: R.bg, stroke: i === 2 ? C.on : C.line2, 'stroke-width': i === 2 ? 1.5 : 1 }, svg);
+      tx(svg, pad + 10, y + 19, R.tag, { fill: R.col, 'font-size': 11, 'font-weight': 700 });
       [R.step1, R.step2, R.out].forEach((txt, k) => {
-        const bx = pad + 8 + k * (bw + 4), by = y + 28;
-        el('rect', { x: bx, y: by, width: bw - 4, height: 30, rx: 5, fill: C.bg, stroke: k === 2 ? R.col : C.line, 'stroke-width': k === 2 ? 1.2 : 0.9 }, svg);
-        tx(svg, bx + (bw - 4) / 2, by + 18.5, txt, { 'text-anchor': 'middle', fill: k === 2 ? R.col : C.fg2, 'font-size': Math.min(9.5, (bw - 10) / 11), 'font-weight': k === 2 ? 600 : 400 });
+        const bx = pad + 10 + k * (bw + gap), by = y + 29;
+        el('rect', { x: bx, y: by, width: bw, height: 31, rx: 5, fill: C.bg, stroke: k === 2 ? R.col : C.line, 'stroke-width': k === 2 ? 1.2 : 0.9 }, svg);
+        tx(svg, bx + bw / 2, by + 19.5, txt, { 'text-anchor': 'middle', fill: k === 2 ? R.col : C.fg2, 'font-size': Math.min(10, Math.max(8.5, bw / 14)), 'font-weight': k === 2 ? 600 : 400 });
+        if (k < 2) tx(svg, bx + bw + gap / 2, by + 19.5, '→', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 10 });
       });
     });
     $('#ct-c2-kpi').innerHTML =
       `<div class="panel"><div class="k">별도 예측기 / 라우터 학습</div><div class="v on" style="font-size:15.5px">0개 <span style="font-size:11.5px;color:var(--fg-3)">(중심점 내적 1회 · gate·up·down 스킵)</span></div></div>
        <div class="panel"><div class="k">뉴런 공유 &amp; 가변 길이</div><div class="v" style="font-size:15.5px">겹침 허용 · 층별 K_j <span style="font-size:11.5px;color:var(--fg-3)">(22% → 1%)</span></div></div>`;
   } else {
-    const H = 248, bv = st.c2b;
+    const H = 254, bv = st.c2b;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '배치 크기에 따른 기존 합집합 붕괴와 Roster 자동 합승 비교' }, host);
     const half = (W - 2 * pad - 12) / 2, rx0 = pad + half + 12;
 
     const meta = {
-      1:    { union: 14, coal: '1명 / 중심점', comp: '13.7%', note: '타일링 불필요 · 직통 GEMV (6.55×)', dens: 1 },
-      512:  { union: 96, coal: '2명 / 중심점', comp: '27.9%', note: '자동 합승 시작 · 실측 1.68 ~ 1.75×', dens: 2 },
-      2048: { union: 100, coal: '8명 / 중심점', comp: '19.1%', note: '1·2순위 77% · 실측 2.56 ~ 2.72×', dens: 4 },
-      8192: { union: 100, coal: '32명 / 중심점', comp: '~14.2%', note: '중심점만으로 0 패딩 ~0% (예상 4~6×)', dens: 6 },
+      1:    { union: 14, coal: '1명 / 중심점', comp: '13.7%', note: '타일링 불필요 · GEMV 6.55×', dens: 1 },
+      512:  { union: 96, coal: '2명 / 중심점', comp: '27.9%', note: '자동 합승 시작 · 실측 1.68~1.75×', dens: 2 },
+      2048: { union: 100, coal: '8명 / 중심점', comp: '19.1%', note: '1·2순위 77% · 실측 2.56~2.72×', dens: 4 },
+      8192: { union: 100, coal: '32명 / 중심점', comp: '~14.2%', note: '0 패딩 ~0% · 예상 4~6×', dens: 6 },
     }[bv];
 
     // 좌측: 기존 토큰별 예측 (합집합 붕괴)
-    el('rect', { x: pad, y: 6, width: half, height: 236, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
-    tx(svg, pad + 10, 24, '기존 토큰별 예측 (Deja Vu 등)', { fill: C.pick, 'font-size': 10.5, 'font-weight': 600 });
-    tx(svg, pad + 10, 39, `배치 B = ${nf(bv)} · 토큰마다 패턴 제각각`, { class: 'lab', 'font-size': 9.5 });
+    el('rect', { x: pad, y: 6, width: half, height: 242, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
+    tx(svg, pad + 10, 24, '기존 토큰별 예측 (Deja Vu 등)', { fill: C.pick, 'font-size': 10.8, 'font-weight': 600 });
+    tx(svg, pad + 10, 40, `배치 B = ${nf(bv)} · 토큰마다 패턴 제각각`, { class: 'lab', 'font-size': 9.5 });
 
     const gRows = 8, gCols = 10, gcs = Math.min(16, Math.floor((half - 24) / gCols));
-    const gxL = pad + (half - gCols * gcs) / 2, gy0 = 50;
+    const gxL = pad + (half - gCols * gcs) / 2, gy0 = 52;
     const seedPat = [
       [1,0,0,1,0,0,0,1,0,0],[0,1,0,0,1,0,0,0,1,0],[0,0,1,0,0,1,0,0,0,1],[1,0,0,0,1,0,1,0,0,0],
       [0,1,0,1,0,0,0,1,0,0],[0,0,1,0,0,0,1,0,1,0],[0,1,0,0,0,1,0,0,0,1],[1,0,1,0,0,0,0,1,0,0],
@@ -1273,16 +1288,16 @@ function drawC2() {
         el('rect', { x: gxL + c * gcs + 1, y: gy0 + r * gcs + 1, width: gcs - 2, height: gcs - 2, rx: 2, fill: on ? C.on : (padZ ? C.picksoft : C.bg), opacity: showRow ? 1 : 0.2 }, svg);
       }
     }
-    const barY = gy0 + gRows * gcs + 14, barW = half - 20;
-    tx(svg, pad + 10, barY, `배치 합집합 밀도: ${meta.union}%`, { fill: meta.union > 80 ? C.pick : C.fg2, 'font-size': 9.5, 'font-weight': 600 });
+    const barY = gy0 + gRows * gcs + 16, barW = half - 20;
+    tx(svg, pad + 10, barY, `배치 합집합 밀도: ${meta.union}%`, { fill: meta.union > 80 ? C.pick : C.fg2, 'font-size': 9.8, 'font-weight': 600 });
     el('rect', { x: pad + 10, y: barY + 6, width: barW, height: 10, rx: 3, fill: C.bg }, svg);
     el('rect', { x: pad + 10, y: barY + 6, width: barW * meta.union / 100, height: 10, rx: 3, fill: meta.union > 80 ? C.pick : C.on }, svg);
-    tx(svg, pad + 10, barY + 30, meta.union >= 95 ? '→ 사실상 밀집 연산 (가속 붕괴)' : '→ B=1에서는 희소 (단일만 빠름)', { class: 'lab', 'font-size': 9 });
+    tx(svg, pad + 10, barY + 32, meta.union >= 95 ? '→ 사실상 밀집 연산 (가속 붕괴)' : '→ B=1에서는 희소 (단일만 빠름)', { class: 'lab', 'font-size': 9.5 });
 
     // 우측: 유한 중심점 Roster (자동 합승)
-    el('rect', { x: rx0, y: 6, width: half, height: 236, rx: 8, fill: C.bg3, stroke: C.on, 'stroke-width': 1.3 }, svg);
-    tx(svg, rx0 + 10, 24, '유한 중심점 Roster (우리)', { fill: C.on, 'font-size': 10.5, 'font-weight': 700 });
-    tx(svg, rx0 + 10, 39, `평균 합승: ${meta.coal} (256 중심점)`, { class: 'lab', 'font-size': 9.5 });
+    el('rect', { x: rx0, y: 6, width: half, height: 242, rx: 8, fill: C.bg3, stroke: C.on, 'stroke-width': 1.3 }, svg);
+    tx(svg, rx0 + 10, 24, '유한 중심점 Roster (우리)', { fill: C.on, 'font-size': 10.8, 'font-weight': 700 });
+    tx(svg, rx0 + 10, 40, `평균 합승: ${meta.coal} (256 중심점)`, { class: 'lab', 'font-size': 9.5 });
 
     const gxR = rx0 + (half - gCols * gcs) / 2;
     const bandCols = [C.on, C.neg, '#3eb8cc'];
@@ -1298,11 +1313,11 @@ function drawC2() {
       const boxH = (bv >= 8192 ? 4 : (bv >= 2048 ? 3 : 2)) * gcs;
       el('rect', { x: gxR, y: gy0, width: 3 * gcs, height: boxH, rx: 3, fill: 'none', stroke: C.fg, 'stroke-width': 1.4 }, svg);
     }
-    tx(svg, rx0 + 10, barY, `실제 연산량: ${meta.comp} (0 패딩 최소화)`, { fill: C.on, 'font-size': 9.5, 'font-weight': 600 });
+    tx(svg, rx0 + 10, barY, `실제 연산량: ${meta.comp} (0 패딩 최소화)`, { fill: C.on, 'font-size': 9.8, 'font-weight': 600 });
     const compNum = parseFloat(meta.comp.replace('~', ''));
     el('rect', { x: rx0 + 10, y: barY + 6, width: barW, height: 10, rx: 3, fill: C.bg }, svg);
     el('rect', { x: rx0 + 10, y: barY + 6, width: barW * compNum / 100, height: 10, rx: 3, fill: C.on }, svg);
-    tx(svg, rx0 + 10, barY + 30, '→ ' + meta.note, { fill: C.on, 'font-size': 9 });
+    tx(svg, rx0 + 10, barY + 32, '→ ' + meta.note, { fill: C.on, 'font-size': 9.5 });
 
     $('#ct-c2-kpi').innerHTML =
       `<div class="panel"><div class="k">배치 B = ${nf(bv)} 평균 합승 인원</div><div class="v on" style="font-size:15.5px">${meta.coal} <span style="font-size:11.5px;color:var(--fg-3)">(출력 100% 동일)</span></div></div>
@@ -1313,37 +1328,39 @@ function drawC2() {
 function drawC3() {
   const H1 = B.hw_bench['1024'], H4 = B.hw_bench['4096'];
   const host = $('#ct-c3-svg'); host.innerHTML = '';
-  const W = Math.max(340, host.clientWidth || 540), H = 258, pad = 10;
+  const W = Math.max(340, host.clientWidth || 540), H = 266, pad = 10;
   const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '단일 요청과 대형 서버 두 환경의 파이프라인 및 실측 가속 비교' }, host);
+  const gap = 12, innerW = W - 2 * pad - 20, bw = (innerW - 2 * gap) / 3;
+  const hdrFs = W < 470 ? 9.8 : 11;
 
   // 상단: 단일 요청 (B=1) 직통 경로
-  el('rect', { x: pad, y: 8, width: W - 2 * pad, height: 112, rx: 8, fill: 'rgba(157,140,255,0.08)', stroke: C.neg, 'stroke-width': 1.2 }, svg);
-  tx(svg, pad + 12, 27, '① 단일 요청 환경 (B = 1 · 로컬/개인 LLM) — 타일링 불필요 · 0 패딩 0%', { fill: C.neg, 'font-size': 11, 'font-weight': 700 });
-  const bw = (W - 2 * pad - 32) / 3;
+  el('rect', { x: pad, y: 8, width: W - 2 * pad, height: 118, rx: 8, fill: 'rgba(157,140,255,0.08)', stroke: C.neg, 'stroke-width': 1.2 }, svg);
+  tx(svg, pad + 12, 27, '① 단일 요청 (B = 1 · 로컬/개인 LLM) — 타일링 불필요 · 0 패딩 0%', { fill: C.neg, 'font-size': hdrFs, 'font-weight': 700 });
   const drawFlow = (y, steps, col) => {
     steps.forEach(([t1, t2], k) => {
-      const bx = pad + 10 + k * (bw + 6);
-      el('rect', { x: bx, y, width: bw, height: 42, rx: 6, fill: C.bg, stroke: k === 2 ? col : C.line2, 'stroke-width': k === 2 ? 1.5 : 1 }, svg);
-      tx(svg, bx + bw / 2, y + 17, t1, { 'text-anchor': 'middle', fill: k === 2 ? col : C.fg, 'font-size': 10, 'font-weight': 600 });
-      tx(svg, bx + bw / 2, y + 32, t2, { 'text-anchor': 'middle', class: 'lab', 'font-size': 8.8 });
+      const bx = pad + 10 + k * (bw + gap);
+      el('rect', { x: bx, y, width: bw, height: 44, rx: 6, fill: C.bg, stroke: k === 2 ? col : C.line2, 'stroke-width': k === 2 ? 1.5 : 1 }, svg);
+      tx(svg, bx + bw / 2, y + 18, t1, { 'text-anchor': 'middle', fill: k === 2 ? col : C.fg, 'font-size': Math.min(10.2, bw / 14), 'font-weight': 600 });
+      tx(svg, bx + bw / 2, y + 34, t2, { 'text-anchor': 'middle', class: 'lab', 'font-size': Math.min(9.2, bw / 16) });
+      if (k < 2) tx(svg, bx + bw + gap / 2, y + 25, '→', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 10 });
     });
   };
-  drawFlow(38, [
-    ['토큰 1개 → 중심점 내적', '활성 뉴런 13.7% 확정'],
-    ['벡터화 bf16 GEMV', '활성 열만 DRAM 직통 로드'],
-    [`실측 ${H1.b1.speedup.toFixed(2)}× / ${H4.b1.speedup.toFixed(2)}×`, 'd=1,024 / d=4,096 · 정확도 99.63%'],
+  drawFlow(40, [
+    ['토큰 1개 → 중심점 내적', '활성 13.7% 선제 확정'],
+    ['벡터화 bf16 GEMV', '활성 열만 DRAM 로드'],
+    [`실측 ${H1.b1.speedup.toFixed(2)}× / ${H4.b1.speedup.toFixed(2)}×`, 'd=1,024 / 4,096 · 99.63%'],
   ], C.neg);
-  tx(svg, pad + 12, 104, '0 마스킹 대조군: 1.00× (가속 0%)  |  우리 전용 커널: 이론 한계(6.85×)의 95.6% 달성', { class: 'lab', 'font-size': 9.5 });
+  tx(svg, pad + 12, 110, '0 마스킹 대조군 1.00×  |  전용 커널: 이론 한계(6.85×)의 95.6% 달성', { class: 'lab', 'font-size': 9.8 });
 
   // 하단: 대형 서버 (B=512~2,048) 5단계 + 스트립 경로
-  el('rect', { x: pad, y: 132, width: W - 2 * pad, height: 118, rx: 8, fill: C.onsoft, stroke: C.on, 'stroke-width': 1.2 }, svg);
-  tx(svg, pad + 12, 151, '② 실제 서버 환경 (B = 512 ~ 2,048 · Chunked Prefill) — 합집합 83% 벽 돌파', { fill: C.on, 'font-size': 11, 'font-weight': 700 });
-  drawFlow(162, [
-    ['자동 합승 + 1* 자유도', '행 압축 · 외딴 1* 자동 OFF'],
-    ['5단계 Roster-Tile + 스트립', '64×32~8×16 · L2 중복 읽기 0%'],
-    [`실측 ${H1.rows[2].best_speedup.toFixed(2)}× / ${H4.rows[2].best_speedup.toFixed(2)}×`, 'B=2,048 (d=1,024/4,096) · 99.59%'],
+  el('rect', { x: pad, y: 136, width: W - 2 * pad, height: 122, rx: 8, fill: C.onsoft, stroke: C.on, 'stroke-width': 1.2 }, svg);
+  tx(svg, pad + 12, 155, '② 실제 서버 (B = 512 ~ 2,048 · Chunked Prefill) — 합집합 83% 돌파', { fill: C.on, 'font-size': hdrFs, 'font-weight': 700 });
+  drawFlow(168, [
+    ['자동 합승 + 1* 자유도', '행 압축 · 외딴 1* OFF'],
+    ['5단계 타일 + L2 스트립', '64×32~8×16 · 재읽기 0%'],
+    [`실측 ${H1.rows[2].best_speedup.toFixed(2)}× / ${H4.rows[2].best_speedup.toFixed(2)}×`, 'B=2,048 · 정확도 99.59%'],
   ], C.on);
-  tx(svg, pad + 12, 232, '0 마스킹 대조군: 1.00 ~ 1.05×  |  기존 문맥적 희소성: 대형 배치 붕괴 또는 FFN 포기', { class: 'lab', 'font-size': 9.5 });
+  tx(svg, pad + 12, 240, '0 마스킹 1.00 ~ 1.05×  |  기존 문맥적 희소성: 대형 배치 붕괴 또는 FFN 포기', { class: 'lab', 'font-size': 9.8 });
 
   $('#ct-c3-kpi').innerHTML =
     `<div class="panel"><div class="k">단일 요청 (B=1 · RTX 4060 실측)</div><div class="v neg" style="font-size:15.5px">${H1.b1.speedup.toFixed(2)}× · ${H4.b1.speedup.toFixed(2)}× <span style="font-size:11.5px;color:var(--fg-3)">(정확도 99.63%)</span></div></div>
