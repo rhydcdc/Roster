@@ -4,6 +4,8 @@
 **/data/FashionMNIST/
 *.pt
 *.npz
+*.dll
+*.so
 __pycache__/
 *.pyc
 code/RECIPE_VIZ.html

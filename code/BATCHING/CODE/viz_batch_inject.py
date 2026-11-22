@@ -1,12 +1,9 @@
-"""레시피 HTML(VIZ/neuron_recipe.html)에 '묶어서 계산' 보기를 덧붙이고, RECIPE_VIZ.html을 다시 만든다. 기존 내용은 건드리지 않는다.
-끼워 넣는 조각 넷은 모두 <!-- 배칭 시작 --> ... <!-- 배칭 끝 --> 안에 있다. 그 밖에 바꾸는 곳은 아키텍처 이름(NAME) 두 곳뿐이다.
-조각을 빼고 이름을 되돌리면 원래 파일과 바이트까지 같은지 확인한다.
-  1. 맨 위 막대의 전환에 버튼 '묶어서 계산'
-  2. 본 스크립트 앞: 처음 주소의 #batch를 기억하는 한 줄 (기존 스크립트가 주소를 #train으로 바꾸기 전에)
-  3. 푸터 앞: 새 보기 (꾸밈은 bt- 이름만)
-  4. 파일 끝: 새 스크립트 (기존 스크립트는 고치지 않는다. 전환 버튼에 동작을 덧붙인다)
-데이터: runs/viz_batch.json (viz_batch_data.py). 고른 방법(뉴런 쪽 블록 + 블록 합치기)만 넣는다.
-python viz_batch_inject.py
+"""레시피 HTML(VIZ/neuron_recipe.html)에 '묶어서 계산'(Roster-Tile 최신 버전) 보기를 덧붙이고,
+RECIPE_VIZ.html을 다시 만든다. 기존 내용('학습 과정', '추론 과정')은 단 1바이트도 건드리지 않는다.
+끼워 넣는 조각 넷은 모두 <!-- 배칭 시작 --> ... <!-- 배칭 끝 --> 안에 있다.
+조각을 빼고 아키텍처 이름(NAME) 두 곳을 되돌리면 원래 파일과 바이트까지 같은지 스스로 확인한다.
+데이터: runs/viz_batch.json (viz_batch_data.py).
+python -X utf8 -W ignore BATCHING/CODE/viz_batch_inject.py
 """
 import json
 import os
@@ -26,141 +23,235 @@ TAB = MS + '<button id="tab-batch" type="button" aria-pressed="false">묶어서 
 PRE = MS + '<script>window.__HASH0__ = location.hash;</script>' + ME
 
 VIEW = MS + r'''
-  <!-- ============ 묶어서 계산 (배칭) ============ -->
+  <!-- ============ 묶어서 계산 (Roster-Tile) ============ -->
   <div class="view" id="view-batch" hidden>
   <style>
   #view-batch .step, #view-batch .split { align-items: start; }
   #view-batch .bt-wide { grid-column: 1 / -1; }
-  #view-batch .bt-wide .bt-tbl th, #view-batch .bt-wide .bt-tbl td { white-space: nowrap; }
+  #view-batch .bt-tbl-wrap { width: 100%; overflow-x: auto; }
   .bt-intro { padding-block: 36px 8px; border-top: 1px solid var(--line); }
-  .bt-intro .no { font-family: var(--mono); font-size: 12px; color: var(--pick); }
+  .bt-intro .no { font-family: var(--mono); font-size: 12px; color: var(--pick); letter-spacing: 0.06em; }
   .bt-intro h2 { font-size: 22px; margin-top: 8px; }
-  .bt-intro p { color: var(--fg-2); margin-top: 10px; max-width: 46em; }
+  .bt-intro p { color: var(--fg-2); margin-top: 10px; max-width: 50em; }
   .bt-intro .stats { margin-top: 18px; }
-  .bt-mat svg, .bt-tile svg, .bt-res svg { display: block; width: 100%; height: auto; }
-  .bt-mat text, .bt-tile text, .bt-res text { font-family: var(--mono); font-size: 11px; fill: var(--fg-3); }
-  .bt-mat .lab, .bt-tile .lab, .bt-res .lab { fill: var(--fg-2); font-size: 11.5px; }
+  .bt-svg svg { display: block; width: 100%; height: auto; }
+  .bt-svg text { font-family: var(--mono); font-size: 11px; fill: var(--fg-3); }
+  .bt-svg .lab { fill: var(--fg-2); font-size: 11.5px; }
+  .bt-svg .hi { fill: var(--fg); font-size: 12px; font-weight: 500; }
   .bt-steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .bt-steps .where { font-size: 13px; color: var(--fg-2); flex: 1; min-width: 12em; }
   .bt-steps .where b { color: var(--pick); font-weight: 500; }
   .bt-side { display: grid; gap: 10px; font-size: 13px; color: var(--fg-2); }
   .bt-side b { color: var(--fg); font-weight: 600; }
   .bt-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  .bt-tbl th, .bt-tbl td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+  .bt-tbl th, .bt-tbl td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   .bt-tbl th { color: var(--fg-3); font-weight: 500; }
   .bt-tbl td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  .bt-tbl tr.sum td { color: var(--fg); border-bottom: 0; }
-  .bt-tbl .ok { color: var(--on); } .bt-tbl .no-ok { color: var(--fg-3); }
-  .bt-real { position: relative; }
-  .bt-real canvas { width: 100%; border-radius: 8px; background: var(--bg); cursor: crosshair; }
-  .bt-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--bg); gap: 2px; }
-  .bt-bar i { display: block; height: 100%; }
+  .bt-tbl tr.sum td { color: var(--fg); font-weight: 600; border-top: 1px solid var(--line-2); border-bottom: 0; background: rgba(87, 213, 231, 0.05); }
+  .bt-tbl .ok { color: var(--on); font-weight: 500; }
+  .bt-tbl .warn { color: var(--pick); font-weight: 500; }
+  .bt-tbl .mut { color: var(--fg-3); font-size: 11.5px; }
+  .bt-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; background: var(--on-soft); color: var(--on); }
+  .bt-pill.pick { background: var(--pick-soft); color: var(--pick); }
+  .bt-kpi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .bt-kpi .panel { gap: 4px; padding: 12px 14px; }
+  .bt-kpi .k { font-size: 12px; color: var(--fg-3); }
+  .bt-kpi .v { font-family: var(--mono); font-size: 18px; font-weight: 500; }
+  .bt-kpi .v.on { color: var(--on); }
+  .bt-kpi .v.pick { color: var(--pick); }
+  .bt-strip-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .bt-strip-chips .chip.plain { padding: 3px 9px; font-size: 12px; font-family: var(--mono); }
+  .bt-prob ol { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--fg-2); font-size: 13px; }
+  .bt-prob ul { margin: 4px 0 0; padding-left: 16px; display: grid; gap: 4px; color: var(--fg-3); font-size: 12.5px; }
+  @media (max-width: 720px) { .bt-kpi { grid-template-columns: 1fr; } }
   </style>
 
   <section class="bt-intro">
-    <div class="no">묶어서 계산 · 여러 요청을 한 번에</div>
-    <h2>같은 뉴런을 쓰는 토큰끼리 모아, 그 뉴런의 가중치를 한 번만 읽는다</h2>
-    <p>서버는 여러 요청의 토큰을 한 번에 계산한다. 토큰마다 켜는 뉴런이 다르니, <b style="color:var(--fg);font-weight:600">뉴런마다 그 뉴런을 쓰는 토큰을 모아 블록으로 묶는다.</b> 블록마다 그 뉴런의 가중치를 한 번 읽어, 그 뉴런을 쓰는 토큰에만 계산한다. 블록이 너무 잘아서 GPU의 계산 조각이 비면 블록 둘을 합친다. 이것이 고른 방법, <b style="color:var(--fg);font-weight:600">뉴런 쪽 블록 + 블록 합치기</b>다. 읽기가 계산보다 훨씬 비싸서(뉴런 하나의 가중치를 읽는 시간 ≈ 토큰 하나 × 뉴런 하나를 계산하는 시간의 약 100배) 이 방법을 골랐다.</p>
+    <div class="no">묶어서 계산 · Roster-Tile</div>
+    <h2>텐서 코어 틀(8×16 · 16×8)에 맞춰 행과 열을 자유롭게 짝지어 묶는다</h2>
+    <p>요청이 하나일 때는 필요한 뉴런(13.7%)만 꺼내 계산하면 바로 빨라진다. 하지만 서버에서 여러 요청을 한꺼번에 묶으면 요청마다 켜는 뉴런이 달라 GPU 텐서 코어 틀 안에 <b style="color:var(--fg);font-weight:600">불필요한 0</b>이 가득 찬다. 이 병목을 두 수학 문제로 단순화해 푼 연동 타일링 <b style="color:var(--fg);font-weight:600">Roster-Tile</b>과 L2 캐시용 <b style="color:var(--fg);font-weight:600">열-스트립</b>을 결합해, 양자화 없는 순수 <span class="mono">bf16</span> 그대로 연산량을 14.9 ~ 18.1%까지 줄였다.</p>
     <div class="stats">
-      <div class="stat"><div class="v num on">5.1%</div><div class="k">읽는 가중치 · 기본 풀 모델의 몇 % (토큰 256개)</div></div>
-      <div class="stat"><div class="v num">51.6%</div><div class="k">하는 연산 · 기본 풀 모델의 몇 % (토큰 256개)</div></div>
-      <div class="stat"><div class="v num">90.68%</div><div class="k">시험 정확도 · 묶어도 그대로</div></div>
+      <div class="stat"><div class="v num on">14.9% ~ 18.1%</div><div class="k">연산량 · 실제 풀 모델 대비 (배치 256 ~ 2,048)</div></div>
+      <div class="stat"><div class="v num">99.59%</div><div class="k">시험 정확도 · 원본(91.02%) 대비 90.65% (통과)</div></div>
+      <div class="stat"><div class="v num on">3.0배 ~ 6.7배</div><div class="k">이론 상한 속도 · 작은 모델 256 ~ 큰 모델 2,048</div></div>
     </div>
-    <p style="font-size:13px;color:var(--fg-3);margin-top:12px">기본 풀 모델 = 뉴런을 다 켠 베이스 모델(91.02%)이 토큰을 들어온 순서대로 16개씩 계산하는 것. 연산량은 GPU가 실제로 계산하는 칸(16 단위로 올림), 읽는 양은 꺼내는 뉴런 수(뉴런 하나 = gate 행 + up 행 + down 열).</p>
   </section>
 
   <section class="step" id="b1">
     <div class="txt">
-      <div class="no">묶기 1 · GPU의 계산 단위</div>
-      <h2>GPU의 텐서 코어는 행렬곱을 고정 크기 조각으로 잘라 계산한다</h2>
-      <p class="key">조각을 다 못 채워도 조각 하나를 통째로 계산한다. 빈자리도 시간이 든다.</p>
-      <p class="why">그래서 토큰이나 뉴런이 적은 블록은 손해다. 블록 둘을 합쳐 빈자리를 채우면 칸이 준다.</p>
-      <p class="note">실제 조각은 16 × 16이다. 아래 예시는 숫자를 줄여 4 × 4로 센다. 결과의 연산량은 모두 16 단위로 올려 센 값이다.</p>
+      <div class="no">묶기 1 · 문제 상황</div>
+      <h2>토큰마다 필요한 뉴런이 산발적이라, 순서대로 틀을 끼우면 0이 가득 찬다</h2>
+      <p class="key">GPU 텐서 코어는 8×16 고정 크기 틀로만 계산한다. 틀 안에 빈칸 0이 들어와도 똑같이 시간이 든다.</p>
+      <ul>
+        <li>세로축은 들어온 토큰(요청), 가로축은 층의 뉴런이다. 청록 칸(<span class="mono">1</span>)이 그 토큰이 켜는 뉴런이다.</li>
+        <li>토큰마다 간 중심점이 달라 <span class="mono">1</span>의 위치가 제각각 흩어져 있다. 들어온 순서대로 틀을 씌우면 틀 안의 대부분이 불필요한 <span class="mono">0</span>(<span class="mono">×0</span>)으로 찬다.</li>
+        <li>최종 모델은 중심점 목록의 <b>끝쪽 10%('꺼도 되는 1', <span class="mono">1*</span>)</b>는 꺼도 시험 정확도가 통과한다(일괄 10% 끄기: 90.62%, 통과선 90.52%).</li>
+      </ul>
+      <p class="why">오른쪽에서 '순서대로 틀 끼우기'를 눌러 보라. 아래 예시는 실제 8×16 틀을 2×3으로 축소한 것이다. 12개 틀을 하나도 건너뛸 수 없어 전체 72칸 중 48칸(66.7%)이 불필요한 0 계산으로 낭비된다.</p>
     </div>
     <div class="vis">
-      <div class="row" style="justify-content:space-between"><h3 style="font-size:14px">토큰 5개 × 뉴런 2개를 4 × 4 조각으로</h3><span class="lbl">필요한 계산 10칸 → GPU가 하는 계산 32칸</span></div>
-      <div class="bt-tile" id="bt-tile1"></div>
-      <div class="legend"><span><i style="background:var(--on)"></i>필요한 계산</span><span><i style="background:var(--off);box-shadow:inset 0 0 0 1px var(--line-2)"></i>빈칸 (계산은 하지만 쓰지 않음)</span></div>
-      <p style="font-size:12.5px;color:var(--fg-2)">토큰 5개는 4의 배수인 8로, 뉴런 2개는 4로 올라간다. 조각 두 개 = 8 × 4 = 32칸. 실제 GPU(16 × 16)에서는 토큰 5개도 16개의 시간이 들고, 토큰 17개면 32개의 시간이 든다.</p>
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <div class="chips" id="bt-p1-btns"></div>
+        <span class="lbl" id="bt-p1-cap"></span>
+      </div>
+      <div class="bt-svg" id="bt-p1-svg"></div>
+      <div class="legend">
+        <span><i style="background:var(--on)"></i>필수 뉴런 (1)</span>
+        <span><i style="background:var(--on-soft);box-shadow:inset 0 0 0 1.5px var(--on)"></i>끝쪽 10% · 꺼도 되는 1 (1*)</span>
+        <span><i style="background:var(--pick)"></i>틀 안의 불필요한 0 (×0)</span>
+        <span><i style="background:var(--off)"></i>안 쓰는 뉴런 (0)</span>
+      </div>
+      <div class="bt-kpi" id="bt-p1-kpi"></div>
     </div>
   </section>
 
   <section class="step" id="b2">
     <div class="txt">
-      <div class="no">묶기 2 · 예시 한 걸음</div>
-      <h2>뉴런마다 그 뉴런을 쓰는 토큰을 모아 블록을 만들고, 칸이 줄면 합친다</h2>
-      <p class="key">블록마다 그 뉴런의 가중치를 한 번만 읽고, 그 뉴런을 쓰는 토큰에만 계산한다.</p>
+      <div class="no">묶기 2 · 문제 단순화와 해결책 Roster-Tile</div>
+      <h2>문제 1·2로 단순화하고, 틀 A·B를 겨뤄 행과 열을 자유롭게 짝짓는다</h2>
+      <p class="key">표 전체의 행·열 순서를 하나로 고정하지 않고, 처음부터 8×16 틀(틀 A)과 90도 돌린 16×8 틀(틀 B)을 함께 겨뤄 1이 가장 빽빽한 행·열 짝을 하나씩 찍어 내고 지운다.</p>
       <ul>
-        <li>서로 다른 요청의 토큰 8개(T1 ~ T8), 층의 뉴런 12개.</li>
-        <li>토큰마다 층 입력과 가장 가까운 중심점이 정해지고, 그 중심점의 뉴런 목록이 그 토큰이 켤 뉴런이다.</li>
-        <li>GPU 칸은 4 × 4 조각으로 센다 (실제는 16 × 16).</li>
+        <li><b>문제 1 (묶기):</b> 행·열 순서를 자유롭게 바꿔 <span class="mono">1</span>을 크고 꽉 찬 직사각형들로 묶고, 끝쪽 <span class="mono">1*</span>은 직사각형에 도움이 되면 끈다.</li>
+        <li><b>문제 2 (틀 맞추기):</b> 틀의 가로줄 하나에는 행 번호 하나, 세로줄 하나에는 열 번호 하나만 넣어(최우선 조건) 틀 A·B로 빈칸 <span class="mono">0</span>이 최소가 되게 찍어 낸다.</li>
+        <li><b>연동 풀기 Roster-Tile:</b> 틀마다 행이 서로 다른 파트너 행과 자유롭게 팀을 짠다(열이 달라 겹침 0칸). 초반엔 <span class="mono">1</span>과 <span class="mono">1*</span>을 함께 채우고, 후반엔 필수 <span class="mono">1</span>만 보고 틀을 열어 <b>이미 열린 틀에 들어온 <span class="mono">1*</span>은 공짜 ON, 새 틀을 열게 하는 외딴 <span class="mono">1*</span>은 자동 OFF</b>한다. 마지막에 썰렁한 꼬리 틀은 앞선 틀의 빈 슬롯에 흡수해 틀째로 지운다.</li>
       </ul>
-      <p class="why">합친 블록에서 토큰은 자기 목록에 없는 뉴런에 0을 곱한다. 그래서 출력은 토큰마다 자기 뉴런만 계산한 것과 똑같고, 정확도는 그대로다.</p>
+      <p class="why">오른쪽 예시는 실제 8×16 · 16×8 틀을 2×3(틀 A) · 3×2(틀 B)로 축소한 4행 × 6열 표다. 행 R3이 1번 틀에서는 R2·R4와, 2번 틀에서는 R1과 자유롭게 짝을 이뤄 4틀을 2틀(불필요한 0 단 1칸)로 압축한다.</p>
     </div>
     <div class="vis">
-      <div class="bt-steps"><button class="btn" id="bt-prev" type="button">이전</button><button class="btn primary" id="bt-next" type="button">다음</button><span class="where" id="bt-where"></span></div>
-      <div class="bt-mat" id="bt-mat"></div>
-      <div class="legend"><span><i style="background:var(--on)"></i>쓰는 칸 (토큰이 그 뉴런을 쓴다)</span><span><i style="background:var(--pick)"></i>0을 곱하는 칸 (블록 안이지만 토큰이 안 쓴다)</span><span><i style="background:var(--off)"></i>계산하지 않음</span></div>
+      <div class="bt-steps">
+        <button class="btn" id="bt-prev" type="button">이전</button>
+        <button class="btn primary" id="bt-next" type="button">다음</button>
+        <span class="where" id="bt-where"></span>
+      </div>
+      <div class="bt-svg" id="bt-mat"></div>
+      <div class="legend">
+        <span><i style="background:var(--on)"></i>필수 1</span>
+        <span><i style="background:var(--neg)"></i>1* 공짜 ON (틀 안)</span>
+        <span><i style="background:var(--pick)"></i>불필요한 0 (×0)</span>
+        <span><i style="background:var(--off);box-shadow:inset 0 0 0 1px var(--line-2)"></i>이미 지운 칸 · 끈 1*</span>
+      </div>
       <div class="bt-side" id="bt-side"></div>
     </div>
+    <details class="fold bt-wide bt-prob"><summary>단순화한 문제 1 · 문제 2 원문 보기</summary><div class="body">
+      <div class="split">
+        <div class="panel">
+          <h3>문제 1</h3>
+          <p>0과 1로 된 표가 있습니다. 행 8개, 열 32개입니다. 행 하나에 1은 8개쯤입니다. 행마다 1 가운데 무작위로 고른 하나에 '꺼도 되는 1' 표시가 있습니다.</p>
+          <ol>
+            <li>1을 묶는 직사각형들을 만들 수 있도록 행과 열의 순서를 마음대로 바꾸십시오. 모든 행과 열을 빠짐없이, 딱 한 번씩만 쓰고, 각 행과 열은 처음 번호를 그대로 달고 옮겨집니다.</li>
+            <li>되도록 최대한 많은 1을 직사각형들로 묶으십시오. 직사각형끼리 겹치면 안 됩니다. 직사각형끼리는 붙어 있어도 되고 떨어져 있어도 됩니다.</li>
+            <li>직사각형들은 최대한 1로만 이루어지게, 최대한 크게 만드십시오. 직사각형 안에는 최대한 적은 0을 포함시키십시오.
+              <ul><li>참고: 한 줄짜리(1 × x, x × 1)도 직사각형입니다. 다만 되도록 여러 줄짜리로 만드십시오.</li></ul>
+            </li>
+            <li>'꺼도 되는 1'은 직사각형을 만드는 데 도움이 되면 끄고, 도움이 안 되면 그대로 두십시오.</li>
+          </ol>
+        </div>
+        <div class="panel">
+          <h3>문제 2</h3>
+          <p>문제 1에서 만든 직사각형들이 있습니다. 1 × 1도 직사각형입니다. 행 8개 × 열 16개짜리 틀 A와 행 16개 × 열 8개짜리 틀 B가 있습니다.</p>
+          <ol>
+            <li><b>(최우선 조건)</b> 틀의 가로줄 하나에는 행 번호 하나만, 세로줄 하나에는 열 번호 하나만 들어갑니다.
+              <ul>
+                <li>예: 줄인 틀(가로줄 2개, 세로줄 4개)로 보면 이렇습니다.
+                  <ul>
+                    <li>조각 (행 1, 열 1·2)와 조각 (행 1, 열 7·8): 행 번호가 같아서 가로줄 하나에 나란히 들어갑니다. 가로줄 하나가 남습니다.</li>
+                    <li>조각 (행 1, 열 1·2)와 조각 (행 5, 열 7·8): 행 번호가 달라서 가로줄을 하나씩 따로 씁니다. 틀이 다 찼는데 8칸 가운데 4칸은 0으로 채워집니다.</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>표 위에서 틀 A 또는 B에 맞게 모든 직사각형을 빠짐없이, 딱 한 번씩만 찍어 내십시오. 큰 직사각형은 잘라도 되고, 큰 직사각형을 자르고 남은 것들이나 작은 직사각형은 한 틀에 조합해도 됩니다. 틀을 다 못 채우면 그곳은 0으로 채우십시오.</li>
+            <li>틀을 다 못 채워 0으로 채우는 칸이 최소가 되게 하십시오.</li>
+          </ol>
+        </div>
+      </div>
+    </div></details>
   </section>
 
   <section class="step" id="b3">
     <div class="txt">
-      <div class="no">묶기 3 · 실제 대기열</div>
-      <h2>실제: 시험 사진 256장을 한 번에, 층마다의 블록</h2>
-      <p class="key">층 1 ~ 3은 이번 걸음에 쓰이는 뉴런이 4,096개 가운데 4,078 ~ 4,093개로 거의 전부다. 그래도 뉴런마다 한 번씩만 읽는다.</p>
+      <div class="no">묶기 3 · 실제 신경망 4개 층 통계</div>
+      <h2>최종 모델의 실제 4개 층에서 계산 칸을 82 ~ 85% 줄이고, 불필요한 0을 94 ~ 97% 없앴다</h2>
+      <p class="key">우리 신경망과 똑같은 4개 층 표(열 4,096개)에 Roster-Tile을 적용해 틀 A·B 개수, 전체 숫자 감소량, 불필요한 0 제거율을 셌다.</p>
       <ul>
-        <li>줄 하나 = 토큰 하나(시험 사진 256장). 간 중심점이 비슷한 토큰끼리 이웃하게 놓았다.</li>
-        <li>칸 하나 = 읽는 뉴런 하나. 블록 순서로 놓았고, 왼쪽일수록 토큰이 많은 블록이다.</li>
-        <li>블록 띠마다 청록은 그 토큰이 쓰는 칸, 호박색은 0을 곱하는 칸, 어두운 곳은 그 블록이 계산하지 않는 토큰이다.</li>
+        <li><b>배치 256 (작은 모델):</b> 전체 4,194,304칸 → <b>762,624칸</b>(5,958틀: 틀 A 5,539 · 틀 B 419). 계산 숫자가 <b>81.8% 감소</b>했고, 풀 모델이 계산하던 불필요한 0(3,620,704개) 중 <b>93.7%를 제거</b>했다.</li>
+        <li><b>배치 1,024 · 2,048 (큰 모델):</b> 배치가 커질수록 같은 중심점에 걸리는 요청이 모여 꽉 찬 틀이 늘어난다. 타일 1 채움률이 <b>70.2% → 77.8% → 83.1%</b>로 올라가고 계산량은 <b>14.9%</b>까지 내려간다.</li>
+        <li>모든 배치와 층에서 필수 <span class="mono">1</span>(앞 90%) 누락 0건 전수 검증을 통과했다.</li>
       </ul>
-      <p class="why">층마다 연산량이 크게 다르다. 토큰마다 뉴런의 21 ~ 22%를 켜는 층 1, 2는 블록 안 토큰들의 목록이 서로 달라 0을 곱하는 칸이 많다. 1.1%를 켜는 층 4는 연산이 아주 적다.</p>
-      <p class="note">그림에 마우스를 올리면 그 블록의 뉴런 수, 토큰 수, GPU 칸이 보인다.</p>
+      <p class="note">오른쪽 위 칩을 눌러 배치 256 · 1,024 · 2,048의 실제 4개 층 통계를 바꿔 볼 수 있다.</p>
     </div>
     <div class="vis">
-      <div class="row" style="justify-content:space-between;gap:12px"><div class="chips" id="bt-layers"></div><span class="lbl" id="bt-rcap"></span></div>
-      <div class="bt-real"><canvas id="bt-cv"></canvas></div>
-      <div class="legend"><span><i style="background:var(--on)"></i>쓰는 칸</span><span><i style="background:var(--pick)"></i>0을 곱하는 칸</span><span><i style="background:var(--off)"></i>이 블록이 계산하지 않는 토큰</span></div>
-      <div class="split">
-        <div class="panel"><h3>읽는 양</h3><dl class="kv" id="bt-kv-r"></dl></div>
-        <div class="panel"><h3>연산량 (16 단위 칸)</h3><dl class="kv" id="bt-kv-c"></dl><div class="bt-bar" id="bt-bar"></div><div class="legend" id="bt-bar-lg"></div></div>
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <div class="chips" id="bt-b-chips"></div>
+        <span class="lbl" id="bt-b-note"></span>
       </div>
+      <div class="bt-tbl-wrap"><table class="bt-tbl" id="bt-ltbl"></table></div>
+      <details class="fold"><summary>참고: 패턴이 전혀 없는 완전 랜덤 최악 조건에서는?</summary><div class="body">
+        <p>우리 신경망과 같은 밀도(22.3 / 20.8 / 10.6 / 1.1%)로 <span class="mono">1</span>을 아무 규칙 없이 흩뿌린 완전 랜덤 256 × 4,096 표 4개에서도 <b>4,194,304칸 → 1,129,984칸(8,828틀, 73.1% 감소 · 26.9%)</b>로 크게 줄어든다. 실제 최종 모델 표는 중심점 구조가 있어 이보다 훨씬 더 잘 묶여 <b>81.8% 감소(18.2%)</b>를 달성했다.</p>
+      </div></details>
     </div>
   </section>
 
   <section class="step" id="b4">
     <div class="txt">
-      <div class="no">묶기 4 · 결과</div>
-      <h2>결과: 토큰 256개를 한 번에 계산할 때, 기본 풀 모델이 읽던 가중치의 5.1%만 읽고, 하던 연산의 51.6%만 한다</h2>
-      <p class="key">읽는 양은 가능한 최소다. 이번 걸음에 쓰이는 뉴런을 한 번씩만 읽으니, 이보다 적게 읽을 수는 없다.</p>
+      <div class="no">묶기 4 · 캐싱 (DRAM 읽는 양 줄이기)</div>
+      <h2>같이 쓰이는 뉴런끼리 미리 옆자리로 이사시켜, L2 크기 구역마다 한 번에 끝낸다</h2>
+      <p class="key">대형 LLM은 한 층 가중치가 L2 캐시(작업대)보다 크다. 4,096열 전체에서 타일을 뽑으면 작업대가 좁아 방금 올린 뉴런을 버렸다가 DRAM에서 또 퍼 오게 된다.</p>
       <ul>
-        <li>연산량 51.6% 가운데 실제로 필요한 계산(쓰는 칸)은 13.8%다. 나머지는 0을 곱하는 칸 36.1%와 빈칸 1.7%다.</li>
-        <li>0을 곱하는 칸이 큰 까닭: 중심점마다 뉴런 목록이 절반 가까이 달라서, 한 블록에 모인 토큰들이 그 블록의 뉴런을 다 쓰지는 않는다.</li>
-        <li>토큰이 많을수록 읽는 양의 몫이 준다 (100개 11.2% → 1,000개 1.3%).</li>
+        <li><b>① 추론 전 딱 1번 — 옆자리로 이사 (비용 0초):</b> FFN은 뉴런 결과를 모두 더하므로 <span class="mono">gate · up · down</span>의 뉴런(열) 순서만 똑같이 바꿔 저장해도 출력이 100% 같다. 중심점 표를 보고 같이 자주 쓰이는 뉴런끼리 이웃하게 한 번 정렬해 둔다.</li>
+        <li><b>② 작업대(L2) 크기 구역으로 나누기:</b> 오른쪽 예시처럼 뉴런 8개·작업대 4칸이면 <span class="mono">[N1, N5, N3, N7]</span>(구역 1)과 <span class="mono">[N2, N6, N4, N8]</span>(구역 2)로 나눈다. 실제 4,096열에서는 대형 LLM L2에 통째로 들어가는 <b>512열씩 8개 구역</b>으로 나눈다.</li>
+        <li><b>③ 구역 1을 완전히 끝낸 뒤 구역 2로 이동:</b> 구역 1을 DRAM에서 <b>딱 1번</b> L2에 올리면 그 안의 타일이 끝날 때까지 단 하나의 뉴런도 쫓겨나지 않는다. 그래서 <b>DRAM 중복 읽기가 1.0배(중복 0%)</b>로 고정된다.</li>
       </ul>
-
+      <p class="why">안 정렬하고 그냥 자르면 늘 같이 쓰이는 N1과 N5가 서로 다른 구역으로 찢어져 연산량이 는다. 미리 옆자리로 모아 두면 구역을 잘라도 타일이 꽉 차고(배치 2,048 연산 14.9%), 8구역 병렬로 타일 구성 시간도 크게 준다(배치 1,024 기준 4.5초).</p>
     </div>
     <div class="vis">
-      <div class="row" style="justify-content:space-between"><h3 style="font-size:14px">기본 풀 모델의 몇 %인가 (층 4개 합)</h3><span class="lbl">토큰 수 = 한 번에 계산하는 요청 수</span></div>
-      <div class="bt-res" id="bt-res"></div>
-      <div class="legend"><span><i style="background:var(--on)"></i>연산: 쓰는 칸</span><span><i style="background:var(--pick)"></i>연산: 0을 곱하는 칸</span><span><i style="background:var(--line-2)"></i>연산: 빈칸</span><span><i style="background:var(--fg-2)"></i>읽는 양</span></div>
-      <p style="font-size:12.5px;color:var(--fg-2)">평상시 서버가 한 걸음에 함께 계산하는 요청은 수십 ~ 200개 남짓이라, 100개와 256개가 실제에 가깝다.</p>
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <div class="chips" id="bt-c-btns"></div>
+        <span class="lbl" id="bt-c-cap"></span>
+      </div>
+      <div class="bt-svg" id="bt-c-svg"></div>
+      <div class="row" id="bt-c-strips-row" style="justify-content:space-between;gap:8px">
+        <span class="lbl">실행할 구역 선택 (작업대 4칸):</span>
+        <div class="bt-strip-chips" id="bt-c-strips"></div>
+      </div>
+      <div class="bt-kpi" id="bt-c-kpi"></div>
     </div>
-    <details class="fold bt-wide"><summary>어떻게 셌나, 줄인 모델 대비</summary><div class="body">
-      <p><b>기본 풀 모델</b> = 다 켠 베이스 모델을 들어온 순서대로 16개씩 계산. <b>줄인 모델</b> = 이 레시피의 최종 모델(13.73%)을 들어온 순서대로 16개씩, 묶음마다 목록의 합집합을 계산. 줄인 모델 대비는 묶는 법만의 몫이고, 기본 풀 모델 대비는 사후 학습과 묶는 법을 합친 몫이다.</p>
-      <table class="bt-tbl" id="bt-tbl"></table>
-      <p><b>연산량</b> = 블록마다 (토큰 수를 16의 배수로 올림) × (뉴런 수를 16의 배수로 올림)의 합. <b>읽는 양</b> = 블록마다 꺼내는 뉴런 수의 합 (뉴런마다 한 블록에만 있으니 이번 걸음에 쓰이는 뉴런 수). 층 4개의 합.</p>
-      <p>대기열은 시험 사진에서 아무렇게나 뽑았다(씨앗 0). 100개는 20번, 256개는 10번, 1,000개는 5번 뽑아 평균했다.</p>
-      <p><b>블록 짜는 법</b>: 쓰는 토큰이 똑같은 뉴런끼리 처음 블록을 만들고, 쓰는 토큰이 겹치는 정도로 나무를 만들어 칸이 가장 적게 자른 뒤, 블록 둘을 합쳐 칸이 줄면 합친다. 블록 짜기는 실제 LLM에서 그 층의 어텐션과 나란히 한다고 본다.</p>
-      <p>다 켠 모델도 토큰 256개를 행렬곱 한 번으로 계산하면 가중치를 한 번만 읽는다. 그와 견주면 고른 방법이 읽는 뉴런은 층 뉴런의 약 82%다 (토큰 256개의 목록을 합치면 뉴런 대부분이 쓰인다).</p>
+  </section>
+
+  <section class="step" id="b5">
+    <div class="txt">
+      <div class="no">묶기 5 · 최종 가속 비교</div>
+      <h2>베이스 모델 정확도의 99.59%를 지키며, 배치 256에서 3.0배 · 대형 배치 2,048에서 6.7배</h2>
+      <p class="key">양자화 없이 순수 <span class="mono">bf16</span> 그대로, DRAM 읽는 양을 실제 풀 모델 이하(81.5 ~ 83.0%)로 방어한 채 연산량을 14.9 ~ 18.1%까지 줄였다.</p>
+      <ul>
+        <li><b>시험 정확도 베이스 모델의 99.59% (90.65%, 통과):</b> 시험 10,000장 전체에 4개 층 연쇄로 Roster-Tile이 실제 골라 끈 마스크를 적용한 결과다(베이스 91.02%, 최종 모델(묶기 전) 90.68%와 0.03%p 차이).</li>
+        <li><b>지금 작은 모델 (배치 256, RTX 4060):</b> 연산 <b>18.1%</b>, DRAM 읽기 <b>81.5%</b> → 이론 상한 <b>3.0배</b>.</li>
+        <li><b>큰 모델 (대형 LLM · H100, 열-스트립 W=512):</b> 운영 서버 표준 Chunked Prefill 배치 1,024에서 연산 <b>16.1%</b> · 읽기 <b>82.6%</b> → <b>4.2배</b>(A100 6.2배), vLLM 기본 청크 배치 2,048에서 연산 <b>14.9%</b> · 읽기 <b>83.0%</b> → <b>6.7배</b>(완전 연산 바운드).</li>
+      </ul>
+      <p class="note">읽는 양 81.5 ~ 83.0%는 층 1~3의 합집합이 99%에 가깝고 층 4만 27~32%라 나오는 물리적 최소다. 대형 배치에서는 연산 시간이 읽기보다 훨씬 길어 연산량 절감이 속도로 그대로 이어진다.</p>
+    </div>
+    <div class="vis">
+      <div class="row" style="justify-content:space-between"><h3 style="font-size:14px">실제 서빙 풀 모델 대비 연산량 · DRAM 읽는 양 · 속도</h3><span class="lbl">bf16 · 실제 풀 모델 = 100%, 1.0배</span></div>
+      <div class="bt-svg" id="bt-res"></div>
+      <div class="legend">
+        <span><i style="background:var(--on)"></i>연산: 쓰는 1</span>
+        <span><i style="background:var(--pick)"></i>연산: 남은 0</span>
+        <span><i style="background:var(--fg-2)"></i>DRAM 읽는 양 (중복 0%)</span>
+      </div>
+      <div class="bt-tbl-wrap"><table class="bt-tbl" id="bt-ftbl"></table></div>
+    </div>
+    <details class="fold bt-wide"><summary>어떻게 셌나 · 정확도 검증 · 이론 상한 기준</summary><div class="body">
+      <p><b>실제 서빙 풀 모델 (기준선 = 100%, 1.0배)</b>: 뉴런을 다 켠 베이스 모델(91.02%)을 cuBLAS로 배치 전체 한 번에 계산한다. 연산량은 <span class="mono">4 × B × 4,096</span>칸, DRAM 읽는 양은 뉴런당 1번(<span class="mono">4 × 4,096 = 16,384</span>열)이다.</p>
+      <p><b>시험 정확도 검증</b>: 시험 사진 10,000장을 256-배치 39개 + 16-배치 1개로 나눠 층 1 → 2 → 3 → 4 연쇄로 Roster-Tile이 실제 선택한 <span class="mono">1*</span> 마스크를 적용했다. 시험 정확도 <b>90.65%</b>(베이스 대비 하락 0.37%p [-0.02, 0.76], 경계 통과), 최종 모델(묶기 전, 90.68%) 대비 하락 0.03%p [-0.12, 0.18](최종 모델(묶기 전)만 맞힘 32장, Roster-Tile만 맞힘 29장), 실제 켜는 뉴런 평균 <b>12.74%</b>(층별 20.73 / 19.34 / 9.83 / 1.05%). 배치 256 연산량 <b>18.1%</b>는 이 39개 배치의 평균이다.</p>
+      <p><b>속도 (Roofline 이론 상한)</b>: 연산과 DRAM 읽기가 완전히 겹치는 이상적 한계 <span class="mono">max(B, ridge) / max(연산비율 × B, 읽기비율 × ridge)</span>로 계산했다(실측 RTX 4060 ridge 104, A100 ridge 156, H100 ridge 295). 실제 GPU 커널 오버헤드와 타일 구성 시간(어텐션과 병렬 숨김 가정)은 제외했다.</p>
+      <p><b>큰 모델 행의 의미</b>: 우리 실제 최종 모델 표의 배치 1,024 · 2,048 데이터에 대형 LLM의 L2 폭(<span class="mono">W = 512</span>열 스트립, 8구역)과 H100 ridge(295)를 적용한 알고리즘 계산 결과다.</p>
     </div></details>
   </section>
   </div>
   ''' + ME
 
 POST = MS + r'''<script>
-/* 묶어서 계산 (배칭) 보기: 기존 스크립트를 고치지 않고 따로 둔다 */
+/* 묶어서 계산 (Roster-Tile) 보기: 기존 스크립트를 고치지 않고 따로 둔다 */
 window.__BATCH__ = __DATA__;
 (() => {
 'use strict';
@@ -169,197 +260,414 @@ const $ = (s, e = document) => e.querySelector(s);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const NS = 'http://www.w3.org/2000/svg';
 const C = {};
-const st = { step: 0, layer: 0, hover: -1 };
+const st = { p1: 1, step: 0, batch: '256', cache: 2, strip: 0 };
 const nf = v => Number(v).toLocaleString('ko-KR');
-const pc = (a, b, d = 1) => (100 * a / b).toFixed(d) + '%';
 function el(t, a = {}, p) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
 function tx(p, x, y, s, a = {}) { const t = el('text', Object.assign({ x, y }, a), p); t.textContent = s; return t; }
-function rgb(h) { const n = parseInt(h.replace('#', ''), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
-const u8 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-const bit = (b, i) => (b[i >> 3] >> (7 - (i & 7))) & 1;
 
-// ---- 묶기 1: 조각 그림 ----
-function drawTile1() {
-  const host = $('#bt-tile1'); host.innerHTML = '';
-  const W = Math.max(260, host.clientWidth || 360), cs = Math.min(34, (W - 70) / 5), H = 8 * cs + 30;
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '토큰 5개 x 뉴런 2개를 4 x 4 조각 두 개로 계산' }, host);
-  const x0 = 64, y0 = 22, names = ['2', '3', '', ''];
-  tx(svg, x0 - 8, y0 - 7, '뉴런', { 'text-anchor': 'end' });
-  names.forEach((n, j) => { if (n) tx(svg, x0 + j * cs + cs / 2, y0 - 7, n, { 'text-anchor': 'middle', class: 'lab' }); });
-  for (let r = 0; r < 8; r++) {
-    tx(svg, x0 - 8, y0 + r * cs + cs / 2 + 4, r < 5 ? 'T' + (r + 1) : '(빈칸)', { 'text-anchor': 'end', class: r < 5 ? 'lab' : '' });
-    for (let c = 0; c < 4; c++) {
-      const use = r < 5 && c < 2;
-      el('rect', { x: x0 + c * cs + 2, y: y0 + r * cs + 2, width: cs - 4, height: cs - 4, rx: 3, fill: use ? C.on : C.off, stroke: use ? 'none' : C.line2, 'stroke-width': 1 }, svg);
+// ---- 묶기 1: 문제 상황 (6행 x 12열, 순서대로 2x3 틀 씌우기) ----
+const P1_ROWS = ['T1 가', 'T2 나', 'T3 다', 'T4 라', 'T5 마', 'T6 바'];
+const P1_G = [
+  [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 2, 0],
+  [0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2],
+  [0, 0, 1, 0, 1, 0, 0, 2, 0, 1, 0, 0],
+  [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0],
+  [0, 1, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0],
+  [0, 0, 1, 0, 1, 0, 0, 0, 2, 0, 0, 1],
+];
+function drawProb() {
+  const btns = $('#bt-p1-btns'); btns.innerHTML = '';
+  ['① 토큰 × 뉴런 표', '② 순서대로 틀(2×3) 끼우기'].forEach((label, idx) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+    b.textContent = label; b.setAttribute('aria-pressed', st.p1 === idx);
+    b.onclick = () => { st.p1 = idx; drawProb(); };
+    btns.appendChild(b);
+  });
+  $('#bt-p1-cap').textContent = st.p1 ? '2×3 틀 12개 · 모든 틀에 불필요한 0이 4칸씩' : '토큰 6개 × 뉴런 12개 · 1이 산발적으로 흩어짐';
+
+  const host = $('#bt-p1-svg'); host.innerHTML = '';
+  const W = Math.max(320, host.clientWidth || 540), lx = 58, rx = 10, top = 28;
+  const cs = Math.min(36, (W - lx - rx) / 12), H = top + 6 * cs + 14;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '토큰 6개 x 뉴런 12개 표와 순서대로 2x3 틀 씌우기' }, host);
+  const tip = $('#tip');
+
+  tx(svg, lx - 8, top - 9, '뉴런', { 'text-anchor': 'end' });
+  for (let c = 0; c < 12; c++) tx(svg, lx + c * cs + cs / 2, top - 9, 'N' + (c + 1), { 'text-anchor': 'middle' });
+  for (let r = 0; r < 6; r++) tx(svg, lx - 8, top + r * cs + cs / 2 + 4, P1_ROWS[r], { 'text-anchor': 'end', class: 'lab' });
+
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 12; c++) {
+      const v = P1_G[r][c], x = lx + c * cs + 2, y = top + r * cs + 2, s = cs - 4;
+      let fill = C.off, stroke = 'none', dash = '';
+      if (v === 1) fill = C.on;
+      else if (v === 2) { fill = C.onsoft; stroke = C.on; dash = '3 2'; }
+      else if (st.p1 === 1) fill = C.pick;
+      const attrs = { x, y, width: s, height: s, rx: 3, fill };
+      if (stroke !== 'none') { attrs.stroke = stroke; attrs['stroke-width'] = 1.4; if (dash) attrs['stroke-dasharray'] = dash; }
+      el('rect', attrs, svg);
+      if (v === 2) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 4, '1*', { 'text-anchor': 'middle', fill: C.on, 'font-size': Math.max(9.5, cs * 0.34), 'font-weight': 600 });
+      else if (v === 0 && st.p1 === 1) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 3.5, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': Math.max(8.5, cs * 0.30) });
     }
   }
-  [0, 4].forEach((r, i) => { el('rect', { x: x0, y: y0 + r * cs, width: 4 * cs, height: 4 * cs, fill: 'none', stroke: C.pick, 'stroke-width': 1.5, rx: 4 }, svg); tx(svg, x0 + 4 * cs + 8, y0 + r * cs + 2 * cs + 4, i ? '둘째 조각' : '첫 조각 (4 × 4)', { class: 'lab' }); });
+  if (st.p1 === 1) {
+    let tid = 0;
+    for (let br = 0; br < 3; br++) {
+      for (let bc = 0; bc < 4; bc++) {
+        tid++;
+        const x = lx + bc * 3 * cs, y = top + br * 2 * cs, w = 3 * cs, h = 2 * cs;
+        const box = el('rect', { x: x + 0.5, y: y + 0.5, width: w - 1, height: h - 1, rx: 4, fill: 'transparent', stroke: C.fg, 'stroke-width': 1.3, 'stroke-opacity': 0.7, style: 'cursor:pointer' }, svg);
+        const idCopy = tid;
+        box.addEventListener('pointerenter', ev => {
+          box.setAttribute('stroke', C.on); box.setAttribute('stroke-width', 2.2); box.setAttribute('stroke-opacity', 1);
+          tip.hidden = false;
+          tip.textContent = `틀 #${idCopy} (2×3): 쓰는 1 = 2칸 · 불필요한 0 = 4칸 (채움 33%)`;
+          tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px';
+          tip.style.top = (ev.clientY - 34) + 'px';
+        });
+        box.addEventListener('pointermove', ev => {
+          tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px';
+          tip.style.top = (ev.clientY - 34) + 'px';
+        });
+        box.addEventListener('pointerleave', () => {
+          box.setAttribute('stroke', C.fg); box.setAttribute('stroke-width', 1.3); box.setAttribute('stroke-opacity', 0.7);
+          tip.hidden = true;
+        });
+      }
+    }
+  }
+  $('#bt-p1-kpi').innerHTML = st.p1
+    ? `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
+       <div class="panel"><div class="k">순서대로 틀 끼운 결과 (2×3 × 12틀)</div><div class="v pick">불필요한 0이 48칸 (66.7%)</div></div>`
+    : `<div class="panel"><div class="k">표 크기 (세로 토큰 × 가로 뉴런)</div><div class="v">6행 × 12열 = 72칸</div></div>
+       <div class="panel"><div class="k">필요한 뉴런</div><div class="v on">필수 18칸 + 끝쪽 1* 6칸</div></div>`;
 }
 
-// ---- 묶기 2: 예시 한 걸음 ----
-const TOK = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8'], CEN = ['가', '가', '가', '나', '나', '다', '다', '다'];
-const LIST = { '가': [1, 2, 3, 4, 5], '나': [1, 2, 3, 6, 7], '다': [1, 8, 9] };
-const uses = (r, n) => LIST[CEN[r]].includes(n);
-const RG = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
-const STEPS = [
-  { title: '토큰 8개가 들어온다', order: RG(1, 12), blocks: [] },
-  { title: '① 뉴런마다 그 뉴런을 쓰는 토큰을 모아 블록을 만든다', order: RG(1, 12), blocks: [
-    { name: '㉠', cols: [1], rows: [0, 7] }, { name: '㉡', cols: [2, 3], rows: [0, 4] }, { name: '㉢', cols: [4, 5], rows: [0, 2] },
-    { name: '㉣', cols: [6, 7], rows: [3, 4] }, { name: '㉤', cols: [8, 9], rows: [5, 7] }] },
-  { title: '② 합쳐서 칸이 줄면 합친다', order: [1, 6, 7, 2, 3, 4, 5, 8, 9, 10, 11, 12], blocks: [
-    { name: 'A', cols: [1, 6, 7], rows: [0, 7] }, { name: 'B', cols: [2, 3, 4, 5], rows: [0, 4] }, { name: 'C', cols: [8, 9], rows: [5, 7] }] },
-  { title: '③ GPU가 블록마다 계산하고, 토큰마다 출력을 더한다', order: [1, 6, 7, 2, 3, 4, 5, 8, 9, 10, 11, 12], focus: 'A', blocks: [
-    { name: 'A', cols: [1, 6, 7], rows: [0, 7] }, { name: 'B', cols: [2, 3, 4, 5], rows: [0, 4] }, { name: 'C', cols: [8, 9], rows: [5, 7] }] },
+// ---- 묶기 2: 해결책 Roster-Tile 4단계 예시 (4행 x 6열, 틀 A 2x3 · 틀 B 3x2) ----
+const J_G = [
+  [1, 0, 1, 0, 1, 2],
+  [0, 1, 0, 1, 0, 0],
+  [1, 1, 2, 1, 0, 0],
+  [0, 1, 0, 1, 0, 2],
 ];
-function drawMat() {
-  const S = STEPS[st.step], host = $('#bt-mat'); host.innerHTML = '';
-  const W = Math.max(300, host.clientWidth || 520), lx = 62, gap = S.blocks.length ? 6 : 0;
-  const groups = S.order.map(n => S.blocks.findIndex(b => b.cols.includes(n)));
-  const ngap = groups.reduce((a, g, i) => a + (i && g !== groups[i - 1] ? 1 : 0), 0);
-  const cs = Math.min(34, (W - lx - 6 - ngap * gap) / 12), top = 42, H = top + 8 * cs + 8;
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '토큰 8개 x 뉴런 12개: ' + S.title }, host);
-  const xs = []; let x = lx;
-  S.order.forEach((n, i) => { if (i && groups[i] !== groups[i - 1]) x += gap; xs.push(x); x += cs; });
-  S.order.forEach((n, i) => tx(svg, xs[i] + cs / 2, top - 6, n, { 'text-anchor': 'middle' }));
-  for (let r = 0; r < 8; r++) tx(svg, lx - 8, top + r * cs + cs / 2 + 4, `${TOK[r]} ${CEN[r]}`, { 'text-anchor': 'end', class: 'lab' });
-  for (let r = 0; r < 8; r++) S.order.forEach((n, i) => {
-    const b = S.blocks.find(q => q.cols.includes(n) && r >= q.rows[0] && r <= q.rows[1]);
-    const u = uses(r, n), dim = S.focus && b && b.name !== S.focus;
-    let f = C.off, o = 1;
-    if (!S.blocks.length) f = u ? C.on : C.off;
-    else if (b) f = u ? C.on : C.pick;
-    else if (groups[i] < 0) o = 0.45;
-    if (dim) o = 0.3;
-    el('rect', { x: xs[i] + 2, y: top + r * cs + 2, width: cs - 4, height: cs - 4, rx: 3, fill: f, opacity: o }, svg);
-    if (b && !u) tx(svg, xs[i] + cs / 2, top + r * cs + cs / 2 + 4, '×0', { 'text-anchor': 'middle', fill: C.bg, opacity: dim ? 0.4 : 1, 'font-size': Math.max(9, cs * 0.32) });
-  });
-  S.blocks.forEach(b => {
-    const i0 = S.order.indexOf(b.cols[0]), i1 = S.order.indexOf(b.cols[b.cols.length - 1]);
-    const foc = !S.focus || b.name === S.focus;
-    el('rect', { x: xs[i0], y: top + b.rows[0] * cs, width: xs[i1] + cs - xs[i0], height: (b.rows[1] - b.rows[0] + 1) * cs, fill: 'none', stroke: foc ? C.fg : C.fg3, 'stroke-width': foc ? 1.8 : 1, rx: 5, opacity: foc ? 1 : 0.5 }, svg);
-    tx(svg, (xs[i0] + xs[i1] + cs) / 2, 18, b.name, { 'text-anchor': 'middle', fill: foc ? C.pick : C.fg3, style: 'font-family: var(--sans); font-size: 19px; font-weight: 600' });
-  });
-  if (S.blocks.length) { const i0 = S.order.indexOf(10); tx(svg, xs[i0] + 1.5 * cs, 13, '안 읽음', { 'text-anchor': 'middle' }); }
-  $('#bt-where').innerHTML = `<b>${S.title}</b> <span class="mono" style="color:var(--fg-3)">(${st.step + 1} / ${STEPS.length})</span>`;
-  drawSide();
-}
-function drawSide() {
-  const s = st.step, side = $('#bt-side');
-  if (s === 0) side.innerHTML = `<p>토큰마다 켤 뉴런 (중심점의 목록):</p><table class="bt-tbl"><tr><th>토큰</th><th>가장 가까운 중심점</th><th>켤 뉴런</th></tr><tr><td>T1, T2, T3</td><td>가</td><td class="num">1, 2, 3, 4, 5</td></tr><tr><td>T4, T5</td><td>나</td><td class="num">1, 2, 3, 6, 7</td></tr><tr><td>T6, T7, T8</td><td>다</td><td class="num">1, 8, 9</td></tr></table><p>뉴런 10 ~ 12는 이번 걸음에 아무 토큰도 쓰지 않는다. <b>그래서 읽지 않는다.</b></p>`;
-  else if (s === 1) side.innerHTML = `<p><b>쓰는 토큰이 똑같은 뉴런끼리 한 블록</b>이다. 블록마다 GPU 칸 = (토큰 수를 4의 배수로) × (뉴런 수를 4의 배수로).</p><table class="bt-tbl"><tr><th>블록</th><th>뉴런</th><th>쓰는 토큰</th><th>GPU 칸</th></tr><tr><td>㉠</td><td class="num">1</td><td>T1 ~ T8 (8개)</td><td class="num">8 × <b>4</b> = 32</td></tr><tr><td>㉡</td><td class="num">2, 3</td><td>T1 ~ T5 (5개)</td><td class="num"><b>8</b> × <b>4</b> = 32</td></tr><tr><td>㉢</td><td class="num">4, 5</td><td>T1 ~ T3 (3개)</td><td class="num"><b>4</b> × <b>4</b> = 16</td></tr><tr><td>㉣</td><td class="num">6, 7</td><td>T4, T5 (2개)</td><td class="num"><b>4</b> × <b>4</b> = 16</td></tr><tr><td>㉤</td><td class="num">8, 9</td><td>T6 ~ T8 (3개)</td><td class="num"><b>4</b> × <b>4</b> = 16</td></tr><tr class="sum"><td>합</td><td colspan="2">읽는 뉴런 9개, 각각 한 번</td><td class="num">112칸</td></tr></table><p>블록이 잘아서 빈칸이 많다. 실제로 필요한 계산은 34칸뿐이다.</p>`;
-  else if (s === 2) side.innerHTML = `<p>블록 둘을 합친 칸이 따로 둔 칸의 합보다 적으면 합친다. 블록끼리 뉴런이 겹치지 않아 <b>읽는 양은 그대로</b>다.</p><table class="bt-tbl"><tr><th>합치는 블록</th><th>따로</th><th>합치면</th><th></th></tr><tr><td>㉠ + ㉣</td><td class="num">32 + 16 = 48</td><td class="num">8 × 4 = 32</td><td class="ok">합친다</td></tr><tr><td>㉡ + ㉢</td><td class="num">32 + 16 = 48</td><td class="num">8 × 4 = 32</td><td class="ok">합친다</td></tr><tr><td>(㉠㉣) + ㉤</td><td class="num">32 + 16 = 48</td><td class="num">8 × 8 = 64</td><td class="no-ok">안 합친다</td></tr></table><p>㉠ + ㉣: 뉴런 1개와 2개는 각각 4칸을 썼는데, 합쳐 3개여도 4칸이다. ㉣의 토큰(T4, T5)은 ㉠의 토큰 안에 이미 있어 토큰 줄도 늘지 않는다. 대신 T1 ~ T3, T6 ~ T8은 뉴런 6, 7에 0을 곱한다.</p><table class="bt-tbl"><tr><th>최종 블록</th><th>뉴런</th><th>토큰</th><th>GPU 칸</th></tr><tr><td>A</td><td class="num">1, 6, 7</td><td>T1 ~ T8</td><td class="num">32</td></tr><tr><td>B</td><td class="num">2, 3, 4, 5</td><td>T1 ~ T5</td><td class="num">32</td></tr><tr><td>C</td><td class="num">8, 9</td><td>T6 ~ T8</td><td class="num">16</td></tr><tr class="sum"><td>합</td><td colspan="2">읽는 뉴런 9개, 각각 한 번</td><td class="num">80칸 (합치기 전 112)</td></tr></table>`;
-  else {
-    side.innerHTML = `<p><b>블록 A를 GPU가 계산하는 모습</b> (4 × 4 조각 두 개):</p><div class="bt-tile" id="bt-tileA"></div><p>① 뉴런 1, 6, 7의 가중치(gate 행, up 행, down 열)를 <b>한 번</b> 꺼낸다. ② T1 ~ T8의 층 입력을 모아 한꺼번에 곱한다. ③ 자기 목록에 없는 뉴런에는 0을 곱한다(×0). ④ 결과를 토큰마다 출력에 더한다.</p><table class="bt-tbl"><tr><th>토큰</th><th>들어간 블록</th><th>계산된 뉴런 (×0 뺌)</th><th>자기 목록과</th></tr><tr><td>T1 (가)</td><td>A + B</td><td class="num">1 + 2, 3, 4, 5</td><td class="ok">같다</td></tr><tr><td>T4 (나)</td><td>A + B</td><td class="num">1, 6, 7 + 2, 3</td><td class="ok">같다</td></tr><tr><td>T6 (다)</td><td>A + C</td><td class="num">1 + 8, 9</td><td class="ok">같다</td></tr></table><p>그래서 출력은 토큰마다 자기 뉴런만 계산한 것과 똑같다.</p>`;
-    drawTileA();
+const J_T1 = { name: '1번 틀 · 틀 B (3×2)', rows: [1, 2, 3], cols: [1, 3] };
+const J_T2 = { name: '2번 틀 · 틀 A (2×3)', rows: [0, 2], cols: [0, 2, 4] };
+const J_STEPS = [
+  { title: '원래 표 (4행 × 6열)', sub: '필수 1이 10개, 꺼도 되는 1*이 3개. 순서대로 2×3 틀로 자르면 4틀 = 24칸이 든다.' },
+  { title: '① 1번 틀 확정 — 틀 B(3×2) 6/6 만점', sub: '틀 B 후보 {R2, R3, R4} × {C2, C4}(6/6 만점)가 틀 A 후보(5/6)를 이겨 1번 틀로 확정된다.' },
+  { title: '② 지우고 2번 틀 확정 — 틀 A(2×3) + 1* 공짜 ON', sub: '1번 틀 6칸을 지운 뒤 남은 필수 1에서 {R1, R3} × {C1, C3, C5}를 뽑는다. (R3, C3)의 1*이 공짜로 들어와 자동 ON!' },
+  { title: '③ 종료 — 외딴 1* 자동 OFF, 4틀 → 2틀 압축 완료', sub: '남은 필수 1이 0개라 즉시 끝난다. (R1, C6) · (R4, C6)의 1* 2개는 새 틀을 열게 하므로 자동 OFF.' },
+];
+const inTile = (t, r, c) => t.rows.includes(r) && t.cols.includes(c);
+
+function drawJoint() {
+  const S = J_STEPS[st.step], host = $('#bt-mat'); host.innerHTML = '';
+  const W = Math.max(360, host.clientWidth || 560);
+  const cs = Math.min(34, Math.max(22, Math.floor((W - 230) / 6)));
+  const lx = 34, top = 34, matW = 6 * cs, gapX = Math.min(44, Math.max(22, Math.floor((W - lx - matW - 205) / 2)));
+  const rx0 = lx + matW + gapX, H = Math.max(top + 4 * cs + 22, 236);
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Roster-Tile 4x6 예시: ' + S.title }, host);
+
+  // 왼쪽: 4x6 표
+  tx(svg, lx, 14, '남은 표 (4행 × 6열)', { class: 'hi' });
+  for (let c = 0; c < 6; c++) tx(svg, lx + c * cs + cs / 2, top - 6, 'C' + (c + 1), { 'text-anchor': 'middle' });
+  for (let r = 0; r < 4; r++) tx(svg, lx - 6, top + r * cs + cs / 2 + 4, 'R' + (r + 1), { 'text-anchor': 'end', class: 'lab' });
+
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 6; c++) {
+      const v = J_G[r][c], x = lx + c * cs + 2, y = top + r * cs + 2, s = cs - 4;
+      const done1 = st.step >= 2 && inTile(J_T1, r, c);
+      const done2 = st.step >= 3 && inTile(J_T2, r, c);
+      const hi1 = st.step === 1 && inTile(J_T1, r, c);
+      const hi2 = st.step === 2 && inTile(J_T2, r, c);
+      const offOpt = st.step === 3 && v === 2 && !done1 && !done2;
+
+      let fill = C.off, stroke = 'none', dash = '', op = 1, txt = '', tfill = C.bg;
+      if (done1 || done2) {
+        fill = C.bg; stroke = C.line; op = 0.7; txt = '·'; tfill = C.fg3;
+      } else if (offOpt) {
+        fill = C.bg; stroke = C.line2; dash = '2 2'; txt = 'OFF'; tfill = C.fg3;
+      } else if (hi2 && v === 0) {
+        fill = C.pick; stroke = C.fg; txt = '×0'; tfill = C.bg;
+      } else if (hi2 && v === 2) {
+        fill = C.neg; stroke = C.fg; txt = '1*'; tfill = C.bg;
+      } else if (v === 1) {
+        fill = C.on; if (hi1 || hi2) stroke = C.fg;
+      } else if (v === 2) {
+        fill = C.onsoft; stroke = C.on; dash = '3 2'; txt = '1*'; tfill = C.on;
+      }
+      const a = { x, y, width: s, height: s, rx: 4, fill, opacity: op };
+      if (stroke !== 'none') { a.stroke = stroke; a['stroke-width'] = (hi1 || hi2) ? 2 : 1.3; if (dash) a['stroke-dasharray'] = dash; }
+      el('rect', a, svg);
+      if (txt) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 4, txt, { 'text-anchor': 'middle', fill: tfill, 'font-size': txt === 'OFF' ? 8.5 : Math.max(9.5, cs * 0.34), 'font-weight': 600 });
+    }
+  }
+
+  // 오른쪽: 확정된 틀 카드들
+  tx(svg, rx0, 14, '확정된 틀', { class: 'hi' });
+  const drawMiniTile = (tile, ox, oy, accent, sub) => {
+    const mcs = Math.min(22, Math.max(16, cs - 6)), tw = tile.cols.length * mcs, th = tile.rows.length * mcs;
+    tx(svg, ox, oy - 16, tile.name, { fill: accent, 'font-size': 11, 'font-weight': 600 });
+    tile.cols.forEach((c, j) => tx(svg, ox + 22 + j * mcs + mcs / 2, oy - 3, 'C' + (c + 1), { 'text-anchor': 'middle', 'font-size': 9.5 }));
+    tile.rows.forEach((r, i) => {
+      tx(svg, ox + 18, oy + i * mcs + mcs / 2 + 3.5, 'R' + (r + 1), { 'text-anchor': 'end', 'font-size': 9.5, class: 'lab' });
+      tile.cols.forEach((c, j) => {
+        const v = J_G[r][c];
+        const f = v === 1 ? C.on : v === 2 ? C.neg : C.pick;
+        el('rect', { x: ox + 22 + j * mcs + 1.5, y: oy + i * mcs + 1.5, width: mcs - 3, height: mcs - 3, rx: 3, fill: f }, svg);
+        if (v === 2) tx(svg, ox + 22 + j * mcs + mcs / 2, oy + i * mcs + mcs / 2 + 3.5, '1*', { 'text-anchor': 'middle', fill: C.bg, 'font-size': 8.5, 'font-weight': 600 });
+        if (v === 0) tx(svg, ox + 22 + j * mcs + mcs / 2, oy + i * mcs + mcs / 2 + 3.5, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': 8 });
+      });
+    });
+    el('rect', { x: ox + 22, y: oy, width: tw, height: th, rx: 4, fill: 'none', stroke: accent, 'stroke-width': 1.5 }, svg);
+    tx(svg, ox + 22 + tw + 8, oy + th / 2 + 4, sub, { class: 'lab', 'font-size': 10.5 });
+  };
+
+  if (st.step === 0) {
+    const rw = Math.max(150, W - rx0 - 8);
+    el('rect', { x: rx0, y: top, width: rw, height: 4 * cs, rx: 8, fill: C.bg, stroke: C.line, 'stroke-dasharray': '4 3' }, svg);
+    tx(svg, rx0 + rw / 2, top + 2 * cs - 4, '틀 A(2×3) · 틀 B(3×2)', { 'text-anchor': 'middle', class: 'lab' });
+    tx(svg, rx0 + rw / 2, top + 2 * cs + 14, '다음을 눌러 추출 시작', { 'text-anchor': 'middle' });
+  } else {
+    drawMiniTile(J_T1, rx0, top + 14, C.on, '6/6 만점');
+    if (st.step >= 2) drawMiniTile(J_T2, rx0, top + 116, C.pick, '5/6 (0 1칸)');
+  }
+
+  $('#bt-where').innerHTML = `<b>${S.title}</b> <span class="mono" style="color:var(--fg-3)">(${st.step + 1} / ${J_STEPS.length})</span>`;
+  const side = $('#bt-side');
+  if (st.step < 3) {
+    side.innerHTML = `<p>${S.sub}</p>`;
+  } else {
+    side.innerHTML = `<p>${S.sub}</p>
+      <div class="bt-tbl-wrap"><table class="bt-tbl">
+        <tr><th>비교</th><th>틀 수</th><th>전체 칸 수</th><th>불필요한 0</th><th>필수 1 (10개)</th></tr>
+        <tr><td>순서대로 그대로 자르기</td><td class="num">4틀</td><td class="num">24칸</td><td class="num warn">11 ~ 14칸</td><td class="num">100%</td></tr>
+        <tr class="sum"><td>Roster-Tile (연동 풀기)</td><td class="num ok">2틀 (이론 최소)</td><td class="num ok">12칸 (-50%)</td><td class="num ok">1칸</td><td class="num ok">100% · 겹침 0</td></tr>
+      </table></div>
+      <p style="font-size:12.5px;color:var(--fg-3)">행 R3은 1번 틀에서는 {R2, R4}와, 2번 틀에서는 R1과 자유롭게 팀을 짰지만 열이 {C2, C4} vs {C1, C3, C5}로 달라 겹치는 칸이 0개다.</p>`;
   }
 }
-function drawTileA() {
-  const host = $('#bt-tileA'); if (!host) return; host.innerHTML = '';
-  const W = Math.max(240, host.clientWidth || 320), cs = Math.min(26, (W - 90) / 4), H = 8 * cs + 26;
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '블록 A: 토큰 8개 x 뉴런 3개 + 빈칸 1열' }, host);
-  const x0 = 62, y0 = 20, cols = [1, 6, 7, 0];
-  tx(svg, x0 - 8, y0 - 6, '뉴런', { 'text-anchor': 'end' });
-  cols.forEach((n, j) => tx(svg, x0 + j * cs + cs / 2, y0 - 6, n ? String(n) : '빈', { 'text-anchor': 'middle', class: n ? 'lab' : '' }));
-  for (let r = 0; r < 8; r++) {
-    tx(svg, x0 - 8, y0 + r * cs + cs / 2 + 4, `${TOK[r]} ${CEN[r]}`, { 'text-anchor': 'end', class: 'lab' });
-    cols.forEach((n, j) => {
-      const u = n && uses(r, n);
-      el('rect', { x: x0 + j * cs + 2, y: y0 + r * cs + 2, width: cs - 4, height: cs - 4, rx: 3, fill: !n ? C.off : u ? C.on : C.pick, stroke: !n ? C.line2 : 'none' }, svg);
-      if (n && !u) tx(svg, x0 + j * cs + cs / 2, y0 + r * cs + cs / 2 + 4, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': 9 });
+
+// ---- 묶기 3: 실제 신경망 4개 층 통계 (배치 256 / 1,024 / 2,048 전환) ----
+function drawLayerStats() {
+  const chips = $('#bt-b-chips'); chips.innerHTML = '';
+  [['256', '배치 256 (작은 모델)'], ['1024', '배치 1,024 (큰 모델)'], ['2048', '배치 2,048 (큰 모델)']].forEach(([k, label]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+    b.textContent = label; b.setAttribute('aria-pressed', st.batch === k);
+    b.onclick = () => { st.batch = k; drawLayerStats(); };
+    chips.appendChild(b);
+  });
+  const T = B.layer_tables[st.batch], tot = T.total;
+  $('#bt-b-note').textContent = T.note;
+
+  const rowHtml = (name, r, isSum) => `<tr${isSum ? ' class="sum"' : ''}>
+    <td>${name} <span class="mut">(${r.density_pct.toFixed(1)}%)</span></td>
+    <td class="num">${nf(r.full_cells)}개</td>
+    <td class="num"><b style="color:var(--fg)">${nf(r.comp_cells)}개</b> <span class="mut">(${nf(r.tiles)}틀: A ${nf(r.tiles_A)} · B ${nf(r.tiles_B)})</span></td>
+    <td class="num ok">${r.reduce_pct.toFixed(1)}% 감소 <span class="mut">(${r.remain_pct.toFixed(1)}%)</span></td>
+    <td class="num">${nf(r.rem_zeros)}개 <span class="mut">(-${r.zero_elim_pct.toFixed(1)}% · 채움 ${r.fill_pct.toFixed(1)}%)</span></td>
+  </tr>`;
+
+  $('#bt-ltbl').innerHTML =
+    '<tr><th>층 (활성 1)</th><th>풀 모델 (전체 그대로)</th><th>Roster-Tile (칸 수 · 틀 A/B)</th><th>숫자 감소량</th><th>남은 불필요한 0</th></tr>' +
+    T.layers.map(r => rowHtml('층 ' + r.layer, r, false)).join('') +
+    rowHtml('4개 층 합계', tot, true);
+}
+
+// ---- 묶기 4: 캐싱 (뉴런 8개 · L2 작업대 4칸 직관 예시) ----
+const C_ORIG = [1, 2, 3, 4, 5, 6, 7, 8];
+const C_SORT = [1, 5, 3, 7, 2, 6, 4, 8];
+const isFamA = n => n % 2 === 1; // N1, N3, N5, N7 = 짝 A (청록), N2, N4, N6, N8 = 짝 B (보라)
+
+function drawCache() {
+  const btns = $('#bt-c-btns'); btns.innerHTML = '';
+  ['① 그대로 돌리면 (중복 읽기)', '② 옆자리로 이사 (비용 0초)', '③ 구역별 실행 (1회 읽기)'].forEach((label, idx) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+    b.textContent = label; b.setAttribute('aria-pressed', st.cache === idx);
+    b.onclick = () => { st.cache = idx; drawCache(); };
+    btns.appendChild(b);
+  });
+  const caps = [
+    '작업대(L2) 4칸이 넘쳐 버렸던 N1을 DRAM에서 또 퍼 옴',
+    '같이 쓰이는 짝(청록 · 보라)끼리 열 순서를 미리 한 번만 정렬',
+    '구역 1개(4칸)가 작업대에 통째로 상주 → 쫓겨남 0개, 1회 읽기',
+  ];
+  $('#bt-c-cap').textContent = caps[st.cache];
+  $('#bt-c-strips-row').style.display = st.cache === 2 ? 'flex' : 'none';
+
+  const sch = $('#bt-c-strips'); sch.innerHTML = '';
+  ['구역 1 (N1·N5·N3·N7)', '구역 2 (N2·N6·N4·N8)'].forEach((lbl, s) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+    b.textContent = lbl; b.setAttribute('aria-pressed', st.strip === s);
+    b.onclick = () => { st.strip = s; drawCache(); };
+    sch.appendChild(b);
+  });
+
+  const host = $('#bt-c-svg'); host.innerHTML = '';
+  const W = Math.max(360, host.clientWidth || 560), H = 224, pad = 16, barW = W - 2 * pad;
+  const gap = 6, midGap = 12, bw = (barW - 7 * gap - midGap) / 8;
+  const bx = i => pad + i * (bw + gap) + (i >= 4 ? midGap : 0);
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '뉴런 8개와 L2 작업대 4칸 캐싱 예시' }, host);
+
+  const drawNeuron = (x, y, h, n, dim) => {
+    const a = isFamA(n), col = a ? C.on : C.neg;
+    el('rect', {
+      x, y, width: bw, height: h, rx: 5,
+      fill: dim ? C.bg : (a ? C.onsoft : 'rgba(157,140,255,0.14)'),
+      stroke: dim ? C.line : col, 'stroke-width': dim ? 1 : 1.5, opacity: dim ? 0.55 : 1,
+    }, svg);
+    tx(svg, x + bw / 2, y + h / 2 + 4, 'N' + n, { 'text-anchor': 'middle', fill: dim ? C.fg3 : col, 'font-size': 11.5, 'font-weight': 600 });
+  };
+
+  if (st.cache === 0) {
+    tx(svg, pad, 16, '원래 뉴런 순서 (같이 쓰이는 짝: 청록 N1·N3·N5·N7 / 보라 N2·N4·N6·N8이 뒤섞임)', { class: 'hi', 'font-size': 11 });
+    C_ORIG.forEach((n, i) => drawNeuron(bx(i), 24, 28, n, false));
+
+    // L2 작업대 (4칸) — 넘쳐서 N1, N5 쫓겨남
+    const l2W = Math.min(barW, Math.max(250, barW * 0.62)), l2X = pad + (barW - l2W) / 2;
+    el('rect', { x: l2X, y: 82, width: l2W, height: 54, rx: 8, fill: C.picksoft, stroke: C.pick, 'stroke-width': 1.6 }, svg);
+    tx(svg, l2X + l2W / 2, 102, 'L2 작업대 (4칸 한계) · N1, N5가 밀려남!', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 11.5, 'font-weight': 600 });
+    tx(svg, l2X + l2W / 2, 122, '현재 상주: [N3, N7, N4, N8] ← N1을 쓰려면 DRAM에서 또 읽음', { 'text-anchor': 'middle', class: 'lab', 'font-size': 10.5 });
+
+    // DRAM -> L2 딱 닿는 연결선 (y=52 ~ y=82)
+    [0, 1, 2, 4, 5].forEach(i => {
+      el('line', { x1: bx(i) + bw / 2, y1: 52, x2: l2X + l2W / 2, y2: 82, stroke: C.pick, 'stroke-width': 1.3, 'stroke-dasharray': '3 3', opacity: 0.85 }, svg);
+    });
+
+    // 실행 순서 (4단계)
+    tx(svg, pad, 158, '전역 타일 실행 순서 (4칸 작업대 초과로 재읽기 발생):', { class: 'lab', 'font-size': 11 });
+    const steps = [
+      ['1) {N1,N5}', '올림 (2/4)', C.fg3],
+      ['2) {N2,N6}', '꽉 참 (4/4)', C.fg3],
+      ['3) {N3,N7}', 'N1·N5 버림!', C.pick],
+      ['4) {N1,N3}', 'N1 또 퍼 옴!', C.pick],
+    ];
+    const cw = (barW - 18) / 4;
+    steps.forEach(([t1, t2, col], k) => {
+      const tx0 = pad + k * (cw + 6), warn = col === C.pick;
+      el('rect', { x: tx0, y: 168, width: cw, height: 42, rx: 6, fill: warn ? C.picksoft : C.bg3, stroke: warn ? C.pick : C.line2, 'stroke-width': warn ? 1.4 : 1 }, svg);
+      tx(svg, tx0 + cw / 2, 185, t1, { 'text-anchor': 'middle', fill: warn ? C.fg : C.fg2, 'font-size': 10.5, 'font-weight': 600 });
+      tx(svg, tx0 + cw / 2, 201, t2, { 'text-anchor': 'middle', fill: col, 'font-size': 10 });
+    });
+  } else if (st.cache === 1) {
+    tx(svg, pad, 14, '원래 순서 → 바꾼 순서 (오프라인 1회 정렬 · 출력 100% 동일 · 추론 시간 0초)', { class: 'hi', 'font-size': 11 });
+    C_ORIG.forEach((n, i) => drawNeuron(bx(i), 22, 26, n, false));
+
+    // 이사 연결선 (y=48 ~ y=92, 위아래 박스에 딱 닿고 글자와 겹치지 않음)
+    C_ORIG.forEach((n, i) => {
+      const j = C_SORT.indexOf(n), x1 = bx(i) + bw / 2, x2 = bx(j) + bw / 2;
+      const col = isFamA(n) ? C.on : C.neg;
+      el('path', { d: `M ${x1} 48 C ${x1} 70, ${x2} 70, ${x2} 92`, fill: 'none', stroke: col, 'stroke-width': 1.5, opacity: 0.8 }, svg);
+    });
+
+    C_SORT.forEach((n, i) => drawNeuron(bx(i), 92, 26, n, false));
+
+    // 구역 1 · 구역 2 묶음 표시 (y=118 ~ y=138 딱 닿는 수직 연결선)
+    const g1x = bx(0), g1w = bx(3) + bw - bx(0);
+    const g2x = bx(4), g2w = bx(7) + bw - bx(4);
+    el('line', { x1: g1x + g1w / 2, y1: 118, x2: g1x + g1w / 2, y2: 138, stroke: C.on, 'stroke-width': 1.8 }, svg);
+    el('line', { x1: g2x + g2w / 2, y1: 118, x2: g2x + g2w / 2, y2: 138, stroke: C.neg, 'stroke-width': 1.8 }, svg);
+
+    el('rect', { x: g1x, y: 138, width: g1w, height: 60, rx: 8, fill: C.onsoft, stroke: C.on, 'stroke-width': 1.4 }, svg);
+    tx(svg, g1x + g1w / 2, 162, '구역 1 (작업대 4칸 딱 맞음)', { 'text-anchor': 'middle', fill: C.on, 'font-size': 11.5, 'font-weight': 600 });
+    tx(svg, g1x + g1w / 2, 182, 'N1 · N5 · N3 · N7 (같이 쓰이는 짝)', { 'text-anchor': 'middle', class: 'lab', 'font-size': 10.5 });
+
+    el('rect', { x: g2x, y: 138, width: g2w, height: 60, rx: 8, fill: 'rgba(157,140,255,0.12)', stroke: C.neg, 'stroke-width': 1.4 }, svg);
+    tx(svg, g2x + g2w / 2, 162, '구역 2 (작업대 4칸 딱 맞음)', { 'text-anchor': 'middle', fill: C.neg, 'font-size': 11.5, 'font-weight': 600 });
+    tx(svg, g2x + g2w / 2, 182, 'N2 · N6 · N4 · N8 (같이 쓰이는 짝)', { 'text-anchor': 'middle', class: 'lab', 'font-size': 10.5 });
+  } else {
+    const s = st.strip, acc = s === 0 ? C.on : C.neg, accSoft = s === 0 ? C.onsoft : 'rgba(157,140,255,0.14)';
+    const zStart = s * 4, zNums = C_SORT.slice(zStart, zStart + 4);
+    tx(svg, pad, 16, `정렬된 DRAM 가중치 · 현재 구역 ${s + 1}만 DRAM에서 딱 1번 올림`, { class: 'hi', 'font-size': 11 });
+    C_SORT.forEach((n, i) => drawNeuron(bx(i), 24, 28, n, Math.floor(i / 4) !== s));
+
+    // 활성 구역 테두리 (y=21..55, 아래 테두리 y=55)
+    const gx = bx(zStart) - 3, gw = bx(zStart + 3) + bw - bx(zStart) + 6;
+    el('rect', { x: gx, y: 21, width: gw, height: 34, rx: 7, fill: 'none', stroke: acc, 'stroke-width': 1.8 }, svg);
+
+    // L2 작업대 박스 (y=83..137, 구역 바로 아래 정렬)
+    const l2W = Math.max(gw, 240), l2X = s === 0 ? pad : pad + barW - l2W;
+    const cx = gx + gw / 2;
+    el('line', { x1: cx, y1: 55, x2: cx, y2: 83, stroke: acc, 'stroke-width': 2 }, svg);
+    el('rect', { x: l2X, y: 83, width: l2W, height: 54, rx: 8, fill: accSoft, stroke: acc, 'stroke-width': 1.6 }, svg);
+    tx(svg, l2X + l2W / 2, 103, `L2 작업대 (4칸) · 구역 ${s + 1} 통째로 상주`, { 'text-anchor': 'middle', fill: acc, 'font-size': 11.5, 'font-weight': 600 });
+    tx(svg, l2X + l2W / 2, 123, `[${zNums.map(n => 'N' + n).join(', ')}] — 끝날 때까지 쫓겨남 0개`, { 'text-anchor': 'middle', class: 'lab', 'font-size': 10.5 });
+
+    // 구역 안 타일 실행 (모두 L2 히트)
+    tx(svg, pad, 159, `구역 ${s + 1} 안의 Roster-Tile 전부 계산 후 ${s === 0 ? '구역 2로 이동' : '층 계산 완료'}:`, { class: 'lab', 'font-size': 11 });
+    const tiles = s === 0
+      ? [['틀 #1 {N1,N5}', 'L2 100% 히트'], ['틀 #2 {N3,N7}', 'L2 100% 히트'], ['틀 #3 {N1,N3}', 'L2 100% 히트']]
+      : [['틀 #1 {N2,N6}', 'L2 100% 히트'], ['틀 #2 {N4,N8}', 'L2 100% 히트'], ['틀 #3 {N2,N4}', 'L2 100% 히트']];
+    const cw = (barW - 12) / 3;
+    tiles.forEach(([t1, t2], k) => {
+      const tx0 = pad + k * (cw + 6);
+      el('rect', { x: tx0, y: 169, width: cw, height: 42, rx: 6, fill: C.bg3, stroke: acc, 'stroke-width': 1.2 }, svg);
+      tx(svg, tx0 + cw / 2, 186, t1, { 'text-anchor': 'middle', fill: C.fg, 'font-size': 10.5, 'font-weight': 600 });
+      tx(svg, tx0 + cw / 2, 202, t2, { 'text-anchor': 'middle', fill: acc, 'font-size': 10 });
     });
   }
-  [0, 4].forEach(r => el('rect', { x: x0, y: y0 + r * cs, width: 4 * cs, height: 4 * cs, fill: 'none', stroke: C.pick, 'stroke-width': 1.3, rx: 4 }, svg));
-  tx(svg, x0 + 4 * cs + 8, y0 + 4 * cs + 4, '쓰는 12 · ×0 12 · 빈칸 8 = 32칸', { class: 'lab' });
+
+  $('#bt-c-kpi').innerHTML = st.cache === 0
+    ? `<div class="panel"><div class="k">대형 LLM DRAM 중복 읽기</div><div class="v pick">2.6 ~ 5.6배 <span style="font-size:12px;color:var(--fg-3)">(작업대 초과로 재읽기 반복)</span></div></div>
+       <div class="panel"><div class="k">지금 작은 모델 (RTX 4060)</div><div class="v">1.0배 <span style="font-size:12px;color:var(--fg-3)">(층 24MB &lt; L2 32MB라 통째로 들어감)</span></div></div>`
+    : `<div class="panel"><div class="k">실제 4,096열 적용 (512열 × 8구역)</div><div class="v on">DRAM 읽기 1.0배 <span style="font-size:12px;color:var(--fg-3)">(중복 0% · 최소 82.6 ~ 83.0%)</span></div></div>
+       <div class="panel"><div class="k">8구역 병렬 타일 구성 시간</div><div class="v">4.5초 <span style="font-size:12px;color:var(--fg-3)">(배치 1,024 · 4개 층 합)</span></div></div>`;
 }
 
-// ---- 묶기 3: 실제 대기열 ----
-const IMG = {};
-function layerImage(l) {
-  if (IMG[l]) return IMG[l];
-  const L = B.real[l], N = B.N, W = L.ncols, cv = document.createElement('canvas');
-  cv.width = W; cv.height = N;
-  const x = cv.getContext('2d'), im = x.createImageData(W, N), on = rgb(C.on), pk = rgb(C.pick), off = rgb(C.off);
-  const offs = []; let c0 = 0;
-  L.blocks.forEach(b => {
-    const rm = u8(b.r), ub = u8(b.u); let k = 0;
-    for (let r = 0; r < N; r++) {
-      const inb = bit(rm, r);
-      for (let j = 0; j < b.n; j++) {
-        let c = off;
-        if (inb) c = bit(ub, k * b.n + j) ? on : pk;
-        const p = (r * W + c0 + j) * 4; im.data[p] = c[0]; im.data[p + 1] = c[1]; im.data[p + 2] = c[2]; im.data[p + 3] = 255;
-      }
-      if (inb) k++;
-    }
-    offs.push(c0); c0 += b.n;
-  });
-  x.putImageData(im, 0, 0);
-  IMG[l] = { cv, offs };
-  return IMG[l];
-}
-function drawReal() {
-  const L = B.real[st.layer], cv = $('#bt-cv'), img = layerImage(st.layer);
-  const d = window.devicePixelRatio || 1, w = Math.max(280, cv.clientWidth), h = Math.round(Math.min(340, Math.max(200, w * 0.42)));
-  cv.style.height = h + 'px'; cv.width = Math.round(w * d); cv.height = Math.round(h * d);
-  const x = cv.getContext('2d');
-  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
-  x.drawImage(img.cv, 0, 0, cv.width, cv.height);
-  if (st.hover >= 0) {
-    const b = L.blocks[st.hover], x0 = img.offs[st.hover] / L.ncols * cv.width, x1 = (img.offs[st.hover] + b.n) / L.ncols * cv.width;
-    x.strokeStyle = C.fg; x.lineWidth = 1.5 * d; x.strokeRect(x0, 1, Math.max(2 * d, x1 - x0), cv.height - 2);
-  }
-  $('#bt-rcap').textContent = `층 ${st.layer + 1} · 토큰 ${B.N}개 × 읽는 뉴런 ${nf(L.ncols)}개 · 블록 ${L.nblocks}개`;
-}
-function drawRealStats() {
-  const L = B.real[st.layer];
-  $('#bt-kv-r').innerHTML = `<dt>읽는 뉴런</dt><dd>${nf(L.reads)}개 / 4,096</dd><dt>기본 풀 모델</dt><dd>${nf(L.full_reads)} (4,096 × 16번)</dd><dt>기본 풀 모델의</dt><dd style="color:var(--on)">${pc(L.reads, L.full_reads)}</dd>`;
-  const pad = L.compute - L.dense, zero = L.dense - L.ones;
-  $('#bt-kv-c').innerHTML = `<dt>고른 방법</dt><dd>${nf(L.compute)}칸</dd><dt>기본 풀 모델</dt><dd>${nf(L.full_compute)}칸</dd><dt>기본 풀 모델의</dt><dd style="color:var(--on)">${pc(L.compute, L.full_compute)}</dd>`;
-  const parts = [[L.ones, C.on, '쓰는 칸'], [zero, C.pick, '0을 곱하는 칸'], [pad, C.line2, '빈칸']];
-  $('#bt-bar').innerHTML = parts.map(p => `<i style="width:${100 * p[0] / L.compute}%;background:${p[1]}"></i>`).join('');
-  $('#bt-bar-lg').innerHTML = parts.map(p => `<span><i style="background:${p[1]}"></i>${p[2]} ${pc(p[0], L.full_compute)}</span>`).join('');
-}
-function realChips() {
-  const host = $('#bt-layers'); host.innerHTML = '';
-  for (let l = 0; l < 4; l++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain'; b.textContent = '층 ' + (l + 1); b.setAttribute('aria-pressed', st.layer === l); b.onclick = () => { st.layer = l; st.hover = -1; realChips(); drawReal(); drawRealStats(); }; host.appendChild(b); }
-}
-function realHover(ev) {
-  const L = B.real[st.layer], cv = $('#bt-cv'), r = cv.getBoundingClientRect(), img = layerImage(st.layer), tip = $('#tip');
-  const col = (ev.clientX - r.left) / r.width * L.ncols;
-  let k = 0; while (k + 1 < img.offs.length && img.offs[k + 1] <= col) k++;
-  if (k !== st.hover) { st.hover = k; drawReal(); }
-  const b = L.blocks[k];
-  tip.hidden = false;
-  tip.textContent = `블록 ${k + 1}: 뉴런 ${b.n}개 × 토큰 ${b.m}개 · GPU 칸 ${nf(b.cells)} · 쓰는 칸 ${pc(b.ones, b.cells, 0)}`;
-  tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px'; tip.style.top = (ev.clientY - 34) + 'px';
-}
-function realLeave() { $('#tip').hidden = true; st.hover = -1; drawReal(); }
-
-// ---- 묶기 4: 결과 ----
-function drawRes() {
+// ---- 묶기 5: 최종 가속 비교 차트 + 표 ----
+function drawFinal() {
   const host = $('#bt-res'); host.innerHTML = '';
-  const W = Math.max(300, host.clientWidth || 520), lx = 96, rx = 24, bh = 14, gh = 54, top = 30, ns = ['100', '256', '1000'], H = top + ns.length * gh + 20;
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '대기열 크기마다 연산량과 읽는 양 (기본 풀 모델 = 100%)' }, host);
+  const items = B.summary.filter(r => r.id !== 'full');
+  const W = Math.max(320, host.clientWidth || 540), lx = 128, rx = 68, bh = 14, gh = 56, top = 28;
+  const H = top + items.length * gh + 22;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '실제 서빙 풀 모델 대비 연산량, DRAM 읽는 양, 이론 상한 속도' }, host);
   const sx = v => lx + v / 100 * (W - lx - rx);
-  for (let v = 0; v <= 100; v += 10) { el('line', { x1: sx(v), x2: sx(v), y1: top - 8, y2: H - 20, stroke: C.line, 'stroke-width': 1 }, svg); if (v % 20 === 0) tx(svg, sx(v), H - 6, v + '%', { 'text-anchor': 'middle' }); }
-  el('line', { x1: sx(100), x2: sx(100), y1: top - 14, y2: H - 20, stroke: C.fg2, 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, svg);
-  tx(svg, sx(100), top - 18, '기본 풀 모델 = 100%', { 'text-anchor': 'end', class: 'lab' });
-  ns.forEach((n, i) => {
-    const R = B.results[n], y = top + i * gh;
-    tx(svg, lx - 10, y + bh + 4, `토큰 ${nf(+n)}개`, { 'text-anchor': 'end', class: 'lab' });
-    let a = 0;
-    [[R.ones, C.on], [R.zero, C.pick], [R.pad, C.line2]].forEach(p => { el('rect', { x: sx(a), y, width: Math.max(0, sx(a + p[0]) - sx(a) - 1.5), height: bh, rx: 2, fill: p[1] }, svg); a += p[0]; });
-    tx(svg, sx(R.compute) + 6, y + bh - 3, '연산 ' + R.compute.toFixed(1) + '%', { class: 'lab' });
-    el('rect', { x: sx(0), y: y + bh + 5, width: Math.max(2, sx(R.reads) - sx(0)), height: bh, rx: 2, fill: C.fg2 }, svg);
-    tx(svg, sx(R.reads) + 6, y + 2 * bh + 2, '읽기 ' + R.reads.toFixed(1) + '%', { class: 'lab' });
+
+  for (let v = 0; v <= 100; v += 20) {
+    el('line', { x1: sx(v), x2: sx(v), y1: top - 6, y2: H - 20, stroke: C.line, 'stroke-width': 1 }, svg);
+    tx(svg, sx(v), H - 6, v + '%', { 'text-anchor': 'middle' });
+  }
+  el('line', { x1: sx(100), x2: sx(100), y1: top - 12, y2: H - 20, stroke: C.fg2, 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, svg);
+  tx(svg, sx(100), top - 16, '실제 풀 모델 = 100%', { 'text-anchor': 'end', class: 'lab' });
+
+  items.forEach((R, i) => {
+    const y = top + i * gh;
+    tx(svg, lx - 10, y + 11, R.id === 'small256' ? '작은 모델 (256)' : `큰 모델 (${R.batch})`, { 'text-anchor': 'end', class: 'hi', 'font-size': 11.5 });
+    tx(svg, lx - 10, y + 26, R.id === 'small256' ? 'RTX 4060' : 'H100 · 열-스트립', { 'text-anchor': 'end', 'font-size': 10 });
+
+    // 연산 막대 (쓰는 1 + 남은 0)
+    const w1 = Math.max(0, sx(R.ones_pct) - sx(0) - 1);
+    const w0 = Math.max(0, sx(R.compute_pct) - sx(R.ones_pct));
+    el('rect', { x: sx(0), y, width: w1, height: bh, rx: 2, fill: C.on }, svg);
+    el('rect', { x: sx(R.ones_pct), y, width: w0, height: bh, rx: 2, fill: C.pick }, svg);
+    tx(svg, sx(R.compute_pct) + 6, y + bh - 3, '연산 ' + R.compute_pct.toFixed(1) + '%', { fill: C.on, 'font-size': 11 });
+
+    // DRAM 읽기 막대 (막대가 길어 라벨을 막대 안쪽 오른쪽 정렬해 뱃지 겹침 원천 방지)
+    el('rect', { x: sx(0), y: y + bh + 5, width: Math.max(2, sx(R.dram_pct) - sx(0)), height: bh, rx: 2, fill: C.fg2, opacity: 0.82 }, svg);
+    tx(svg, sx(R.dram_pct) - 6, y + 2 * bh + 2, '읽기 ' + R.dram_pct.toFixed(1) + '%', { 'text-anchor': 'end', fill: C.bg, 'font-size': 10, 'font-weight': 600 });
+
+    // 오른쪽 속도 뱃지
+    const bx = W - rx + 12;
+    el('rect', { x: bx, y: y + 4, width: 52, height: 24, rx: 12, fill: C.onsoft, stroke: C.on, 'stroke-width': 1 }, svg);
+    tx(svg, bx + 26, y + 20, R.speedup.toFixed(1) + '배', { 'text-anchor': 'middle', fill: C.on, 'font-size': 11.5, 'font-weight': 600 });
   });
-  $('#bt-tbl').innerHTML = '<tr><th>토큰 수</th><th>기본 풀 모델 대비 연산 / 읽기</th><th>줄인 모델 대비 연산 / 읽기</th><th>연산 = 쓰는 + 0곱 + 빈칸</th></tr>' +
-    ns.map(n => { const R = B.results[n]; return `<tr><td>${nf(+n)}개</td><td class="num">${R.compute.toFixed(1)}% / ${R.reads.toFixed(1)}%</td><td class="num">${R.compute_seq.toFixed(1)}% / ${R.reads_seq.toFixed(1)}%</td><td class="num">${R.ones.toFixed(1)} + ${R.zero.toFixed(1)} + ${R.pad.toFixed(1)}</td></tr>`; }).join('');
+
+  $('#bt-ftbl').innerHTML =
+    '<tr><th>구분</th><th>배치 (토큰)</th><th>적용 방식</th><th>연산량</th><th>DRAM 읽는 양</th><th>속도 (이론 상한)</th></tr>' +
+    B.summary.map(r => {
+      const hi = r.id === 'large2048';
+      return `<tr${hi ? ' class="sum"' : ''}>
+        <td><b>${r.name}</b> <span class="mut">${r.sub}</span></td>
+        <td class="num">${r.batch}</td>
+        <td>${r.method}</td>
+        <td class="num${r.id !== 'full' ? ' ok' : ''}">${r.compute_pct.toFixed(1)}%</td>
+        <td class="num">${r.dram_pct.toFixed(1)}%</td>
+        <td class="num">${r.id === 'full' ? '1.0배' : `<span class="bt-pill">${r.speedup.toFixed(1)}배</span> <span class="mut">${r.speedup_note}</span>`}</td>
+      </tr>`;
+    }).join('');
 }
 
 // ---- 보기 전환 (기존 버튼에 동작을 덧붙인다) ----
-let ready = false;
-function drawAll() { drawTile1(); drawMat(); realChips(); drawReal(); drawRealStats(); drawRes(); }
+function drawAll() { drawProb(); drawJoint(); drawLayerStats(); drawCache(); drawFinal(); }
 function show() {
   ['tab-train', 'tab-infer'].forEach(id => $('#' + id).setAttribute('aria-pressed', 'false'));
   $('#tab-batch').setAttribute('aria-pressed', 'true');
@@ -369,17 +677,16 @@ function show() {
 }
 function hide() { $('#tab-batch').setAttribute('aria-pressed', 'false'); $('#view-batch').hidden = true; }
 function init() {
-  ['--bg', '--bg-2', '--off', '--on', '--pick', '--fg', '--fg-2', '--fg-3', '--line', '--line-2'].forEach(n => C[n.slice(2).replace('-', '')] = css(n));
+  ['--bg', '--bg-2', '--bg-3', '--off', '--on', '--on-soft', '--pick', '--pick-soft', '--neg', '--fg', '--fg-2', '--fg-3', '--line', '--line-2']
+    .forEach(n => C[n.slice(2).replace(/-/g, '')] = css(n));
   $('#tab-batch').addEventListener('click', show);
   $('#tab-train').addEventListener('click', hide); $('#tab-infer').addEventListener('click', hide);
-  $('#bt-prev').onclick = () => { st.step = Math.max(0, st.step - 1); drawMat(); };
-  $('#bt-next').onclick = () => { st.step = Math.min(STEPS.length - 1, st.step + 1); drawMat(); };
-  const cv = $('#bt-cv'); cv.addEventListener('pointermove', realHover); cv.addEventListener('pointerleave', realLeave);
+  $('#bt-prev').onclick = () => { st.step = Math.max(0, st.step - 1); drawJoint(); };
+  $('#bt-next').onclick = () => { st.step = Math.min(J_STEPS.length - 1, st.step + 1); drawJoint(); };
   let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => { if (!$('#view-batch').hidden) drawAll(); }, 160); }).observe(document.body);
-  ready = true;
   if (window.__HASH0__ === '#batch') show();
 }
-(function wait(t0) {                                            // 기존 스크립트가 데이터를 다 불러온 뒤에 시작한다
+(function wait(t0) {
   const ld = $('#loading');
   if (ld && ld.hidden) init(); else if (performance.now() - t0 < 15000) requestAnimationFrame(() => wait(t0)); else init();
 })(performance.now());
@@ -391,7 +698,6 @@ def strip(s):
     return re.sub(re.escape(MS) + '.*?' + re.escape(ME), '', s, flags=re.S)
 
 
-# 아키텍처 이름 (사용자, 2026-11-22): 기존 내용 가운데 바꾸는 곳은 이 둘뿐이다. 되돌리면 원래와 같다.
 NAME = [('<title>뉴런 고르기 레시피</title>', '<title>Roster · 뉴런 고르기 레시피</title>'),
         ('<div class="brand"><b>뉴런 고르기 레시피</b><span>FFN · Fashion-MNIST · 층 4개 × 뉴런 4,096개</span></div>',
          '<div class="brand"><b>Roster</b><span>뉴런 고르기 레시피 · FFN · Fashion-MNIST · 층 4개 × 뉴런 4,096개</span></div>')]
@@ -407,7 +713,7 @@ def main():
     raw = open(PAGE, 'rb').read()
     crlf = b'\r\n' in raw
     page = raw.decode('utf-8').replace('\r\n', '\n')
-    base = unname(strip(page))                                     # 이미 넣은 적이 있으면 빼고(이름도 되돌리고) 다시 넣는다
+    base = unname(strip(page))
     data = json.load(open(os.path.join(HERE, 'runs', 'viz_batch.json'), encoding='utf-8'))
     post = POST.replace('__DATA__', json.dumps(data, ensure_ascii=False, separators=(',', ':')))
     a1 = '<button id="tab-infer" type="button" aria-pressed="false">추론 과정</button>'
