@@ -1,18 +1,19 @@
-# 코드
+# 코드 (최종 통합판: `CH2_M32_B1B2_r9` + `v4` 커널 + `A3V4` 디스패처)
 
-레시피 페이지(`../index.html`)의 결과를 낸 코드를 그대로 추렸다. 폴더 구조도 연구할 때 그대로라 실험 흔적이 섞여 있다. 연구 때와 다른 곳은 경로 세 곳뿐이다: `AUTO/EXP1/CODE/auto.py`가 이 `code/` 폴더를 맨 위로 알아보게 했고, `EXP1/CODE/runs/s1_pick.json`의 베이스 모델 경로를 상대 경로로 바꿨으며, `Roster-Tile` 엔진 폴더를 `ROSTER_TILE/`로 두었다.
+아키텍처 시각화 페이지(`../index.html`)의 모든 수치를 재현하는 **최신·필수 소스 코드만** 정리했다(이전 `Lc6`·초기 프로토타입 코드는 제거).
+경로 보정 사항: `AUTO/EXP1/CODE/auto.py`가 이 `code/` 폴더를 루트로 인식하며, `EXP1/CODE/runs/s1_pick.json`은 상대 경로를 사용한다.
 
-필요한 것: Python 3.13, PyTorch 2.6 (CUDA), torchvision, numpy, scipy, Pillow, g++ (C++ 엔진 자동 컴파일용). CUDA 커널은 PyTorch 내장 NVRTC로 런타임 컴파일한다. Fashion-MNIST는 처음 돌릴 때 torchvision이 받는다.
+필수 환경: Python 3.13, PyTorch 2.6 (CUDA), torchvision, numpy, scipy, scikit-learn, Pillow, `g++` (AVX2 C++ 엔진 자동 컴파일). CUDA 커널은 PyTorch 내장 NVRTC로 런타임 컴파일되며, Fashion-MNIST 데이터셋은 첫 실행 시 자동 다운로드된다.
 
 | 차례 | 폴더 | 명령 | 만드는 것 |
 |---|---|---|---|
-| 1. 사전 학습 (베이스 모델, 뉴런을 다 켬) | `EXP1/CODE` | `python s1_train.py all` | `runs/s1_seed2/best.pt`, `runs/s1_pick.json` |
-| 2. 출발점: 층마다 중심점 256개와 뉴런 목록, K 50%로 가볍게 사후 학습 | `AUTO/EXP1/CODE` | `python auto.py queue --set F` | `runs/F_K2048_lam3/best.pt`, `runs/rules/ltable_M256.pt` |
-| 3. ① 사후 학습 → ② K 줄이기를 되풀이 (1 ~ 4바퀴) | `AUTO/EXP2/CODE` | `python lchain.py run` | `runs/Lb1 ~ Lb4`, `runs/rules/lv_Lb*.pt` |
-| 4. 되풀이 5 ~ 6바퀴 (최종 모델) | `AUTO/EXP2/CODE` | `python lc.py` | `runs/Lc6_lr9.49367e-07/best.pt`, `runs/rules/lv_Lc6.pt` |
-| 5. 묶어서 계산 (5단계 다중 크기 · 열-스트립 · 10,000장 정확도) | `BATCHING/CODE` | `python ms_solver.py full5` | `runs/col_orders.npz`, `runs/ms_roster5_stats.json` |
-| 6. 실제 GPU 커널 실측 (단일 요청 B=1 + 실제 서버 B=512~2,048) | `BATCHING/CODE` | `python gemv_b1.py` → `python bench_final_4060.py` | `runs/speed_b1_final.json`, `runs/speed_roster5_final.json` |
-| 7. 레시피 페이지 | `VIZ/CODE`, `BATCHING/CODE` | `python extract.py` → `python build_local.py` → `python viz_batch_data.py` → `python viz_batch_inject.py` | `RECIPE_VIZ.html` (= 맨 위 `index.html`) |
+| 1. 베이스 사전 학습 (뉴런 100%) | `EXP1/CODE` | `python s1_train.py all` | `runs/s1_seed2/best.pt` (91.02%) |
+| 2. 구조 스크리닝 & `CH2` 9바퀴 공유 사후 학습 (`M=[32,32,32,256]` + `B1/B2`) | `OPT/TRACK_B` | `python b_structural_screen.py` → `python b_champ_chains.py` | `runs/CH2_M32_B1B2_r9_lr1e-06_lb0/best.pt`, `lv_CH2_M32_B1B2_r9.pt`, `winner_orders.npz` |
+| 3. 검증 전용 `1*` 선택 & 10,000장 연쇄 시험 검증 | `OPT/TRACK_B` | `python b3_opt_scan_val.py` → `python verify_b_10k.py` | `runs/b_10k_accuracy.json` (`1*=0%`, **90.81%**) |
+| 4. RTX 4060 최종 E2E 실측 (서버 + 단일 `B=1` + 10회 `BSMR` 대조) | `OPT/TRACK_B` | `python bench_b_e2e.py` → `python bench_b_single.py` → `python compare_b_bsmr.py` | `runs/track_b_final.json`, `speed_b1_ch2.json`, `compare_bsmr_ch2.json` |
+| 5. 자립형 인터랙티브 시각화 빌드 | `OPT/TRACK_B` | `python extract_roster_viz.py` → `python build_roster_viz.py` | `VIZ/roster_viz.html`, `ROSTER_VIZ.html` (= 루트 `index.html`) |
 
-- 사후 학습의 손실 = 교차 엔트로피 + 10 × 출력 맞추기 + 1 × 목록 앞쪽으로 몰기 (`auto.py`의 `make_loss`). 고른 뉴런만 계산한 채로 학습한다.
-- 모든 학습·추론·커널 실측 숫자는 RTX 4060 Laptop, 순수 bf16에서 냈다. 이론 상한은 실측 RTX 4060(ridge 104) · A100(ridge 156) · H100(ridge 295) Roofline 기준이다.
+### 주요 모듈 구성
+- **`OPT/TRACK_A/`:** `p1_v4.py` (`P1Unified v4` 4-CTA 텐서 코어 커널), `p2_v4.py` · `p2_kernels.py` (`P2Fast v4` + `pack_h_v4` + `autoTM`), `a3_dispatch_v4.cpp` · `a3_dispatch_v4.py` (16스레드 AVX2 제로-브랜치 오프라인-인덱스 디스패처).
+- **`OPT/TRACK_B/`:** `track_b_lib.py` (`B1` 균형 가족 + `B2` 32열 블록 공유 사후 학습 엔진), 학습·검증·실측 스크립트 및 `extract_roster_viz.py` · `roster_viz_js.py` · `build_roster_viz.py`.
+- **`EXP1/CODE/`, `AUTO/EXP1/CODE/`, `AUTO/EXP2/CODE/`, `BATCHING/CODE/`:** 위 최종 파이프라인이 직접 임포트하는 공통 모델·커널·`BSMR` 대조·`ms_engine.cpp` 라이브러리만 유지했다.
