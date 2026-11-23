@@ -27,8 +27,8 @@ VIEW = MS + r'''
   <div class="view" id="view-batch" hidden>
   <style>
   #view-batch .step, #view-batch .split, #view-contrib .step, #view-contrib .split { align-items: start; }
-  #view-batch .bt-wide, #view-contrib .bt-wide { grid-column: 1 / -1; }
-  #view-batch .bt-tbl-wrap, #view-contrib .bt-tbl-wrap { width: 100%; overflow-x: auto; }
+  #view-batch .bt-wide, #view-contrib .bt-wide { grid-column: 1 / -1; min-width: 0; max-width: 100%; }
+  #view-batch .bt-tbl-wrap, #view-contrib .bt-tbl-wrap { width: 100%; max-width: 100%; overflow-x: auto; }
   .bt-intro { padding-block: 36px 8px; border-top: 1px solid var(--line); }
   .bt-intro .no { font-family: var(--mono); font-size: 12px; color: var(--pick); letter-spacing: 0.06em; }
   .bt-intro h2 { font-size: 22px; margin-top: 8px; }
@@ -76,7 +76,18 @@ VIEW = MS + r'''
   .bt-prob ul { margin: 4px 0 0; padding-left: 16px; display: grid; gap: 4px; color: var(--fg-3); font-size: 12.5px; }
   .bt-recipe { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 7px; color: var(--fg-2); font-size: 13px; }
   .bt-recipe b { color: var(--fg); font-weight: 600; }
-  @media (max-width: 720px) { .bt-kpi { grid-template-columns: 1fr; } }
+  .bt-scale-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .bt-scale-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .bt-scale-box { background: var(--bg-3); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 12.5px; color: var(--fg-2); min-width: 0; overflow-wrap: break-word; }
+  .bt-scale-box h4 { margin: 0 0 7px; font-size: 13px; color: var(--fg); font-weight: 600; }
+  .bt-scale-box ul { margin: 0; padding-left: 16px; display: grid; gap: 5px; }
+  .bt-scale-box b { color: var(--fg); font-weight: 600; }
+  .bt-tbl tr.sub-hi td { color: var(--fg); background: rgba(157, 140, 255, 0.06); }
+  .bt-tbl tr.sum td.ok, .bt-tbl tr.sum td.ok b, .bt-tbl tr.sub-hi td.ok, .bt-tbl tr.sub-hi td.ok b { color: var(--on); }
+  .bt-tbl td.warn, .bt-tbl td.warn b { color: var(--pick); }
+  .bt-tbl tr.ablat td { color: var(--fg-2); font-style: italic; }
+  #ct-c1-scale-fold .body { min-width: 0; overflow: hidden; }
+  @media (max-width: 720px) { .bt-kpi, .bt-scale-grid { grid-template-columns: 1fr; } }
   </style>
 
   <section class="bt-intro">
@@ -340,6 +351,33 @@ VIEW = MS + r'''
       <div class="bt-kpi" id="ct-c1-kpi"></div>
       <div class="bt-tbl-wrap"><table class="bt-tbl" id="ct-c1-tbl"></table></div>
     </div>
+    <details class="fold bt-wide" id="ct-c1-scale-fold"><summary>실제 모델 스케일(4층 × 4,096 뉴런) 10회 반복 타일 통계 대조 — 정적 · SDDMM(BSMR) vs 우리 최신 5단계 Roster-Tile</summary><div class="body">
+      <div class="bt-scale-meta">
+        <div class="bt-strip-chips" id="ct-c1-sb-chips"></div>
+        <span class="lbl" id="ct-c1-sb-cap"></span>
+      </div>
+      <div class="bt-kpi" id="ct-c1-sb-kpi" style="margin-bottom:12px"></div>
+      <div class="bt-tbl-wrap"><table class="bt-tbl" id="ct-c1-sb-tbl"></table></div>
+      <div class="bt-scale-grid">
+        <div class="bt-scale-box">
+          <h4>Strip512(열-스트립) vs 전역 W=4,096 — 무슨 차이인가? (B=2,048 기준)</h4>
+          <ul>
+            <li><b>전역 <span class="mono">W=4,096</span> (이론 최선 · 소형 모델 최적):</b> 뉴런 4,096개 전체에서 가장 잘 겹치는 열끼리 자유롭게 틀을 짜 <b>칸 수(17.2%)와 ×0(26.4%)이 가장 적다.</b> 다만 큰 모델(<span class="mono">d=4,096</span>, 층 96MB &gt; L2 32MB)에서는 틀이 전체 열을 넘나들어 L2에서 쫓겨나고 DRAM 재읽기가 생긴다(실측 1.68×).</li>
+            <li><b><span class="mono">Strip512</span> (실전 최종 서빙판 · 512열 × 8구역):</b> 오프라인 정렬된 4,096열을 <b>512열씩 8구역</b>(구역당 <span class="mono">gate+up ≈ 8MB &lt; L2</span>)으로 나눠 한 구역 안에서만 틀을 다 끝내고 다음 구역으로 넘어간다. 구역 경계 탓에 ×0은 소폭 늘지만(17.2% → 19.2%), DRAM에서 딱 1번만 읽어 큰 모델 실측 속도가 <b>1.68× → 2.72× (+62%)</b>로 크게 앞선다.</li>
+          </ul>
+        </div>
+        <div class="bt-scale-box">
+          <h4>왜 BSMR과 대조군을 여러 단계로 나눠 돌렸나? (B=2,048 기준)</h4>
+          <ul>
+            <li><b>정적 <span class="mono">MatFormer</span> · 고전 1D <span class="mono">SpMM(32×32)</span>:</b> 앞쪽 고정은 필수 1의 <b>57.6%를 누락</b>하고, 전역 1D 정적 격자는 1이 흩어져 빈 틀이 거의 안 생김(71.8% · ×0 80.9%)을 실제 스케일에서 확인.</li>
+            <li><b><span class="mono">BSMR 원 논문(16×16, BSA)</span> → <span class="mono">OLO(16×16, Strip512)</span>:</b> 논문 원형(가중 자카드 행 군집)보다 우리 중심점 정렬(<span class="mono">OLO</span>)이 BSMR에 훨씬 유리함(25.4% → 23.0%)을 확인해 <i>"행 정렬 차이"</i> 반박을 차단.</li>
+            <li><b><span class="mono">BSMR 32×32</span> → <span class="mono">BSMR 5단계 행 패널 상한</span>:</b> <i>"16×16 작은 틀이라 비용이 불리했다 · 5단계 틀 덕분이다"</i> 반박을 막으려고 BSMR에 대형 틀과 우리와 똑같은 5단계 크기·비용표까지 모두 허용. 그래도 행 패널 고정 때문에 ×0이 <b>5.35M vs 우리 2.18M(-59.3%)</b>로 크게 갈린다.</li>
+            <li><b>어블레이션 (우리 <span class="mono">1*</span> 없음 vs 공식 <span class="mono">1*</span> 포함):</b> 비격자 자유 조합 단독으로 ×0을 <b>-54.6%</b> 깎고, <span class="mono">1*</span>이 나머지 칸(-8.3%)·×0(-10.2%)·저속 <span class="mono">8×16</span> 꼬리(-24.2%)를 추가 정리함을 분리 증명.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note" style="margin-top:10px">※ 실제 <span class="mono">Lc6</span> 4개 층 FFN 1단계(<span class="mono">gate·up</span>) 출력 희소 표에서 실제 추론 커널(<span class="mono">p1_v3</span>)에 들어가는 동일 C++ 솔버(<span class="mono">ms_solve_cost_weighted</span>)로 측정. 모든 방식이 "틀의 가로줄당 행 번호 1개 · 세로줄당 열 번호 1개" 직교 곱집합 조건을 100% 준수한다. 실측 비용%는 RTX 4060 5단계 틀 단가(<span class="mono">64×32:1680 · 32×32:1024 · 32×16:640 · 16×16:486 · 8×16:410</span>) 가중 합 기준이다.</p>
+    </div></details>
   </section>
 
   <section class="step" id="c2">
@@ -408,7 +446,7 @@ const $ = (s, e = document) => e.querySelector(s);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const NS = 'http://www.w3.org/2000/svg';
 const C = {};
-const st = { p1: 1, step: 0, batch: '2048', cache: 2, strip: 0, c1: 3, c1c: 0, c1t: -1, c2: 1, c2b: 2048 };
+const st = { p1: 1, step: 0, batch: '2048', cache: 2, strip: 0, c1: 3, c1c: 0, c1t: -1, c1sb: '2048', c2: 1, c2b: 2048 };
 const nf = v => Number(v).toLocaleString('ko-KR');
 function el(t, a = {}, p) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
 function tx(p, x, y, s, a = {}) {
@@ -1418,6 +1456,79 @@ function drawC1() {
         <td class="num${r.m === 3 ? ' ok' : ''}"><b>${r.ops}</b> <span class="mut">${r.opsSub}</span></td>
         <td class="num ${r.zCls}"><b>${r.z}</b> <span class="mut">${r.zSub}</span></td>
         <td class="num ${r.keepCls}">${r.keep}</td>
+      </tr>`;
+    }).join('');
+
+  drawC1Scale();
+}
+
+const C1_SCALE_META = {
+  dense_64x32:                    { name: '기준: 순서대로 끼우기 (Dense 64×32)',        cls: '' },
+  matformer_matched:              { name: '정적 ① MatFormer (동일 활성률 예산)',        cls: '' },
+  static_1d_32x32:                { name: '정적 ② 고전 SpMM (전역 1D · 32×32)',         cls: '' },
+  bsmr_16x16_bsa_paper:           { name: 'SDDMM: BSMR 원 논문 (16×16 · BSA)',          cls: '' },
+  bsmr_16x16_strip512:            { name: 'SDDMM: BSMR 최강 OLO (16×16 · Strip512)',    cls: '' },
+  bsmr_32x32_strip512:            { name: 'SDDMM: BSMR 대형 틀 (32×32 · Strip512)',     cls: '' },
+  bsmr_5tier_panel_strip512_cost: { name: 'SDDMM: BSMR 5단계 행 패널 상한 (Strip512)',  cls: '' },
+  roster5_strip512_fixed1:        { name: '어블레이션: 우리 5단계 비격자 (1* 없음 · Strip512)', cls: 'ablat' },
+  roster5_strip512:               { name: '우리 최신 5단계 Roster-Tile (공식 Strip512)', cls: 'sum' },
+  roster5_global:                 { name: '우리 최신 5단계 Roster-Tile (전역 W=4,096)', cls: 'sub-hi' },
+};
+
+function drawC1Scale() {
+  const sc = B.scale_cmp;
+  if (!sc) return;
+  const chips = $('#ct-c1-sb-chips'); chips.innerHTML = '';
+  [['512', 'B = 512'], ['1024', 'B = 1,024'], ['2048', 'B = 2,048 (vLLM 기본)']].forEach(([val, lbl]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
+    b.textContent = lbl; b.setAttribute('aria-pressed', st.c1sb === val);
+    b.onclick = () => { st.c1sb = val; drawC1Scale(); };
+    chips.appendChild(b);
+  });
+  const d = sc.batches[st.c1sb];
+  $('#ct-c1-sb-cap').textContent =
+    `4개 층 × ${nf(d.B)} × 4,096 = ${nf(d.full_cells)}칸 (실제 1+1* ${nf(d.active_mean)}칸 · ${d.active_pct}%) · 독립 배치 ${sc.n_trials}회 평균 (전역·어블레이션 ${sc.n_global_trials}회)`;
+
+  const byId = Object.fromEntries(d.rows.map(r => [r.id, r]));
+  const ours = byId.roster5_strip512;
+  const b5 = byId.bsmr_5tier_panel_strip512_cost;
+  const bPaper = byId.bsmr_16x16_bsa_paper;
+  const zRed5 = (100 * (1 - ours.zeros / b5.zeros)).toFixed(1);
+  const cRed5 = (100 * (1 - ours.cells / b5.cells)).toFixed(1);
+  const sp5 = (b5.cost_pct / ours.cost_pct).toFixed(2);
+  const tRedP = (100 * (1 - ours.tiles / bPaper.tiles)).toFixed(1);
+  const zRedP = (100 * (1 - ours.zeros / bPaper.zeros)).toFixed(1);
+  const spP = (bPaper.cost_pct / ours.cost_pct).toFixed(2);
+
+  $('#ct-c1-sb-kpi').innerHTML =
+    `<div class="panel"><div class="k">BSMR 5단계 행 패널 상한 대비 (동일 Strip512 · 5단계 틀)</div><div class="v on" style="font-size:14.5px">×0 -${zRed5}% · 칸 -${cRed5}% · 비용 ${sp5}× 우위</div></div>
+     <div class="panel"><div class="k">BSMR 원 논문(16×16 · BSA) 대비 (공식 Strip512)</div><div class="v on" style="font-size:14.5px">틀 -${tRedP}% · ×0 -${zRedP}% · 비용 ${spP}× 우위</div></div>`;
+
+  $('#ct-c1-sb-tbl').innerHTML =
+    `<tr><th>방식 (실제 4층 × ${nf(d.B)} × 4,096 · ${sc.n_trials}회 평균)</th><th>네모 틀 개수</th><th>틀 안 전체 칸 (풀 대비)</th><th>불필요한 0 (×0 비중)</th><th>필수 1 보존</th><th>실측 비용%</th></tr>` +
+    d.rows.map(r => {
+      const m = C1_SCALE_META[r.id];
+      const isOurs = r.id === 'roster5_strip512' || r.id === 'roster5_global';
+      const isMat = r.id === 'matformer_matched';
+      const clsAttr = m.cls ? ` class="${m.cls}"` : '';
+      const nameHtml = isOurs ? `<b>${m.name}</b>` : m.name;
+      const tStr = `${nf(Math.round(r.tiles))} <span class="mut">±${nf(Math.round(r.tiles_std))}</span>`;
+      const cStr = `<b>${nf(r.cells)}</b> <span class="mut">(${r.cells_pct.toFixed(1)}%)</span>`;
+      const zCls = isOurs ? ' ok' : (r.zero_pct >= 50 ? ' warn' : '');
+      const zStr = `<b>${nf(r.zeros)}</b> <span class="mut">(${r.zero_pct.toFixed(1)}%)</span>`;
+      let keepHtml;
+      if (isMat) keepHtml = `<span class="warn">${r.mand_pct.toFixed(1)}% (${(100 - r.mand_pct).toFixed(1)}% 누락)</span>`;
+      else if (isOurs) keepHtml = `<span class="ok">100%</span> <span class="mut">(1* ${r.opt_off_pct.toFixed(0)}% OFF)</span>`;
+      else keepHtml = `100% <span class="mut">(1* 못 끔)</span>`;
+      const costCls = isOurs ? ' ok' : (r.cost_pct >= 50 ? ' warn' : '');
+      const costStr = `${r.cost_pct.toFixed(1)}%`;
+      return `<tr${clsAttr}>
+        <td>${nameHtml}</td>
+        <td class="num${isOurs ? ' ok' : ''}">${tStr}</td>
+        <td class="num${isOurs ? ' ok' : ''}">${cStr}</td>
+        <td class="num${zCls}">${zStr}</td>
+        <td class="num">${keepHtml}</td>
+        <td class="num${costCls}"><b>${costStr}</b></td>
       </tr>`;
     }).join('');
 }

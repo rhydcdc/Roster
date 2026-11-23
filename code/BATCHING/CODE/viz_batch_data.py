@@ -107,6 +107,53 @@ def main():
     ms = json.load(open(os.path.join(RUNS_S, 'ms_roster5_stats.json'), encoding='utf-8'))
     sp = json.load(open(os.path.join(RUNS_S, 'speed_roster5_final.json'), encoding='utf-8'))
     b1 = json.load(open(os.path.join(RUNS_S, 'speed_b1_final.json'), encoding='utf-8'))
+    cmp_raw = json.load(open(os.path.join(RUNS_S, 'compare_tiling_scale.json'), encoding='utf-8'))
+
+    # 4) 핵심 기여 1 접이식: 실제 Lc6 4층×4,096 스케일 10회 반복 타일 비교
+    cmp_keys = [
+        'dense_64x32',
+        'matformer_matched',
+        'static_1d_32x32',
+        'bsmr_16x16_bsa_paper',
+        'bsmr_16x16_strip512',
+        'bsmr_32x32_strip512',
+        'bsmr_5tier_panel_strip512_cost',
+        'roster5_strip512_fixed1',
+        'roster5_strip512',
+        'roster5_global',
+    ]
+    scale_cmp = dict(
+        n_trials=cmp_raw['n_trials'],
+        n_global_trials=cmp_raw['n_global_trials'],
+        batches={}
+    )
+    for b_int in (512, 1024, 2048):
+        bk = f'B{b_int}'
+        br = cmp_raw['results'][bk]
+        full_c = br['dense_64x32']['full_cells']
+        act_m = int(round(br['dense_64x32']['active']['mean']))
+        rows_c = []
+        for nm in cmp_keys:
+            r = br[nm]
+            rows_c.append(dict(
+                id=nm,
+                trials=r['n_trials'],
+                tiles=round(r['tiles']['mean'], 1),
+                tiles_std=round(r['tiles']['std'], 1),
+                cells=int(round(r['cells']['mean'])),
+                cells_pct=round(r['cells_pct']['mean'], 2),
+                cells_std=round(r['cells_pct']['std'], 2),
+                zeros=int(round(r['zeros']['mean'])),
+                zero_pct=round(r['zero_share_pct']['mean'], 1),
+                mand_pct=round(r['mand_keep_pct']['mean'], 2),
+                opt_off_pct=round(r['opt_off_pct']['mean'], 1),
+                cost_pct=round(r['silicon_cost_pct']['mean'], 1),
+            ))
+        scale_cmp['batches'][str(b_int)] = dict(
+            B=b_int, full_cells=full_c, active_mean=act_m,
+            active_pct=round(100.0 * act_m / full_c, 2),
+            rows=rows_c,
+        )
 
     strip_by_b = {r['B']: r for r in ms['strip_W512']}
     acc = ms['accuracy_10k']
@@ -245,6 +292,7 @@ def main():
         layer_tables=layer_tables,
         summary=summary_rows,
         hw_bench=hw_bench,
+        scale_cmp=scale_cmp,
         strip_meta=dict(
             W=512, n_strips=8,
             runtime_512=round(b512['runtime_sec'], 2),
