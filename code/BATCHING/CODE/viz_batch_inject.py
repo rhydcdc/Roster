@@ -100,7 +100,7 @@ VIEW = MS + r'''
         <li>토큰마다 간 중심점이 달라 <span class="mono">1</span>의 위치가 제각각 흩어져 있다. 들어온 순서대로 틀을 씌우면 틀 안의 대부분이 불필요한 <span class="mono">0</span>(<span class="mono">×0</span>)으로 찬다.</li>
         <li>최종 모델은 중심점 목록의 <b>끝쪽 10%('꺼도 되는 1', <span class="mono">1*</span>)</b>는 꺼도 시험 정확도가 통과한다(일괄 10% 끄기: 90.62%, 통과선 90.52%).</li>
       </ul>
-      <p class="why">오른쪽에서 <b>② 순서대로 틀 끼우기</b>와 <b>③ 기존 SpMM (1D 재배열)</b>을 눌러 비교해 보라. 아래 예시는 실제 8×16 틀을 2×3으로 축소한 것이다. 순서대로 끼우면 12틀(72칸) 중 48칸(66.7%)이 0으로 낭비되고, 기존 SpMM처럼 표 전체 행·열을 최적으로 1번 줄 세워 빈 틀 4개를 건너뛰어도 <b>가로 조 경계선</b>에 막혀 8틀(48칸) 중 절반인 24칸(50.0%)이 여전히 0으로 낭비된다.</p>
+      <p class="why">오른쪽에서 <b>② 순서대로 틀 끼우기</b>와 <b>③ 기존 SDDMM (BSMR · 행 패널 고정)</b>을 눌러 비교해 보라. 아래 예시는 실제 8×16 틀을 2×3으로 축소한 것이다. 순서대로 끼우면 12틀(72칸) 중 48칸(66.7%)이 0으로 낭비된다. 최신 <b>BSMR · Fused3S · TC-GNN</b>처럼 행을 고정 패널로 나눈 뒤 패널마다 열을 따로 정렬해 빈 5틀을 건너뛰어도, <b>주황색 고정 행 패널 경계</b>에 막혀 어떤 행 짝짓기를 골라도 최소 7틀(42칸) 중 18칸(42.9%)이 0으로 낭비되거나 저밀도 틀을 CUDA 코어로 우회해야 한다.</p>
     </div>
     <div class="vis">
       <div class="row" style="justify-content:space-between;gap:8px">
@@ -124,7 +124,7 @@ VIEW = MS + r'''
       <h2>문제 1·2에 5단계 틀 순위를 매겨, 빽빽한 덩어리는 64×32 · 32×32로 떠내고 자투리만 8×16으로 마감한다</h2>
       <p class="key">텐서 코어 1회 명령은 8×16으로 이미 꽉 차지만, 8×16만 단독으로 돌리면 L2에서 데이터를 나르느라 코어가 26%에서 막힌다. 1순위 64×32(cuBLAS의 최대 98.7%)와 2순위 32×32를 먼저 뽑아야 공유 메모리 재사용으로 풀스피드가 나온다.</p>
       <ul>
-        <li><b>0단계 (같은 중심점 자동 합승):</b> 같은 중심점을 고른 요청은 켜는 뉴런이 100% 같다. 이를 먼저 묶어 두면 0을 하나도 넣지 않고 큰 틀 덩어리가 저절로 커진다(출력 100% 동일).</li>
+        <li><b>0단계 (같은 중심점 토큰 묶기):</b> 같은 중심점에 속한 요청은 켜는 뉴런이 100% 겹친다. 이를 먼저 묶어 두면 0을 하나도 넣지 않고 큰 틀 덩어리가 저절로 커진다(출력 100% 동일).</li>
         <li><b>문제 2 확장 (5단계 틀 크기 우선순위):</b> RTX 4060 실측 효율에 맞춰 <b>1순위 <span class="mono">64×32</span> → 2순위 <span class="mono">32×32</span> → 3순위 <span class="mono">32×16</span> → 4순위 <span class="mono">16×16</span> → 5순위 <span class="mono">8×16</span></b> 순위와 실측 타일 비용(<span class="mono">1680 · 1024 · 640 · 486 · 410</span>)을 지정한다. 단위 GPU 시간당 필수 <span class="mono">1</span>을 가장 많이 덮는 큰 틀부터 차례로 뽑고, 느린 <span class="mono">8×16</span>은 1% 미만 자투리만 맡긴다. (A100·H100처럼 더 큰 칩은 최상위 틀만 <span class="mono">128×64</span> 등으로 키우면 같은 기법이 그대로 적용된다.)</li>
         <li><b>연동 풀기 + <span class="mono">1*</span> 자동 정리:</b> 모든 틀은 필수 <span class="mono">1</span>을 우선으로 덮으며, <b>이미 열린 틀에 들어온 <span class="mono">1*</span>은 공짜 ON, 새 틀을 열게 하는 외딴 <span class="mono">1*</span>은 자동 OFF</b>한다.</li>
       </ul>
@@ -185,10 +185,10 @@ VIEW = MS + r'''
     <div class="txt">
       <div class="no">묶기 3 · 실제 서버 환경 4개 층 통계 (5단계 다중 크기)</div>
       <h2>실제 서버 배치(512 ~ 2,048 토큰)에서 연산의 72 ~ 77%를 64×32 · 32×32 고속 틀로 묶고, 저속 8×16은 1% 미만으로 줄였다</h2>
-      <p class="key">실제 LLM 서빙 서버의 토큰 청크(배치 <span class="mono">512 / 1,024 / 2,048</span>)에 같은 중심점 자동 합승 + 5단계 순위 + 512열 8구역 스트립을 적용하고, 시험 10,000장 연쇄 정확도까지 새로 실측했다.</p>
+      <p class="key">실제 LLM 서빙 서버의 토큰 청크(배치 <span class="mono">512 / 1,024 / 2,048</span>)에 같은 중심점 토큰 묶기(뉴런 100% 겹침) + 5단계 순위 + 512열 8구역 스트립을 적용하고, 시험 10,000장 연쇄 정확도까지 새로 실측했다.</p>
       <ul>
         <li><b>배치 512 (소형 청크 · <span class="mono">W=512</span>):</b> 전체 8,388,608칸 → <b>2,338,432칸(27.9%)</b>, 불필요한 0 <b>83.0% 제거</b>. 1·2순위(<span class="mono">64×32 · 32×32</span>) 비중 <b>72.0%</b>, 저속 <span class="mono">8×16</span>은 <b>0.9%</b>에 그친다.</li>
-        <li><b>배치 1,024 · 2,048 (Chunked Prefill · vLLM 기본 청크):</b> 배치가 커질수록 같은 중심점 합승이 늘어나 1순위 <span class="mono">64×32</span> 비중이 <b>29.8% → 38.7%</b>로 커지고, 1·2순위 고속 틀 합계가 <b>72.4% → 77.0%</b>에 달한다. 저속 <span class="mono">8×16</span>은 <b>0.3% → 0.2%</b>로 사실상 사라지며 연산량은 <b>23.0% → 19.1%</b>(불필요한 0 <b>92.5% 제거</b>)까지 내려간다.</li>
+        <li><b>배치 1,024 · 2,048 (Chunked Prefill · vLLM 기본 청크):</b> 배치가 커질수록 같은 중심점에 속하는 토큰이 많아져(뉴런 100% 겹침) 1순위 <span class="mono">64×32</span> 비중이 <b>29.8% → 38.7%</b>로 커지고, 1·2순위 고속 틀 합계가 <b>72.4% → 77.0%</b>에 달한다. 저속 <span class="mono">8×16</span>은 <b>0.3% → 0.2%</b>로 사실상 사라지며 연산량은 <b>23.0% → 19.1%</b>(불필요한 0 <b>92.5% 제거</b>)까지 내려간다.</li>
         <li><b>새로 실측한 시험 10,000장 연쇄 정확도 90.65% (베이스 91.02%의 99.59%, 통과):</b> 묶기 전 최종 모델(90.68%)과 <b>0.03%p 차이</b>로 통계적 동등 수준이며, 전 배치·전 층 필수 <span class="mono">1</span> 누락 0건을 전수 검증했다.</li>
       </ul>
       <p class="note">오른쪽 위 칩을 눌러 실제 서버 배치 512 · 1,024 · 2,048의 4개 층 5단계 통계를 비교해 보라.</p>
@@ -291,7 +291,7 @@ VIEW = MS + r'''
     <details class="fold bt-wide"><summary>커널 최적화 레시피 한눈에 보기 (출력 무손실 · 순수 bf16)</summary><div class="body">
       <ol class="bt-recipe">
         <li><b>단일 요청(<span class="mono">B=1</span>) 전용 벡터화 <span class="mono">bf16</span> GEMV 커널:</b> 타일링 없이 활성 뉴런 인덱스 배열만 순회해 128비트(<span class="mono">uint4</span> · 8 <span class="mono">bf16</span>) 로드 + 워프 리덕션으로 <span class="mono">gate·up·SiLU</span>를 레지스터에서 융합하고, 2단계 <span class="mono">down</span>은 <span class="mono">d</span> 차원 블록 분할 병렬 축소로 DRAM 대역폭(213 GB/s, 기준의 96%)을 포화시켰다.</li>
-        <li><b>같은 중심점 요청 자동 합승:</b> 같은 중심점을 고른 서버 토큰은 활성 뉴런이 100% 같으므로 타일링 전 자동 합승해 0 추가 없이 <span class="mono">64×32 · 32×32</span> 대형 덩어리를 만든다.</li>
+        <li><b>같은 중심점 토큰 묶기 (뉴런 100% 겹침):</b> 같은 중심점에 속한 서버 토큰은 켜는 뉴런이 100% 겹치므로 타일링 전 먼저 묶어 0 추가 없이 <span class="mono">64×32 · 32×32</span> 대형 덩어리를 만든다.</li>
         <li><b>5단계 실측 비용 가중 우선순위 + 단일 통합 커널(<span class="mono">P1Unified</span>):</b> 5개 크기(<span class="mono">64×32</span> 1개/CTA · <span class="mono">32×32</span> 1개/CTA · <span class="mono">32×16</span> 2개/CTA · <span class="mono">16×16</span> 2개/CTA · <span class="mono">8×16</span> 4개/CTA)를 스트립 순서대로 커널 1번에 띄워 1단계 <span class="mono">64×32</span>가 <span class="mono">cuBLAS</span>의 최대 98.7% 효율을 내고 구역 간 웨이브 테일을 없앴다.</li>
         <li><b>전치 <span class="mono">mma.m16n8k16</span> + 무셔플 <span class="mono">SiLU×Up</span> 레지스터 융합:</b> <span class="mono">M = 2×뉴런 수</span>, <span class="mono">N = 토큰 수</span>로 매핑하고 가중치를 <span class="mono">[gate 8줄 | up 8줄]</span> 16줄 블록으로 배치해, 모든 크기에서 코어 100% 채움 + 워프 셔플 없이 같은 스레드에서 <span class="mono">silu(g)·u·mask</span>를 끝낸다.</li>
         <li><b>오프라인 가중치 물리 재배치 (<span class="mono">W_gu</span> 인접 저장):</b> 추론 전 1회, 열 정렬 순서대로 <span class="mono">gate · up · down</span> 행을 물리 재배열해 각 512열 스트립이 DRAM에 연속 구역으로 놓이게 한다(추론 비용 0초).</li>
@@ -306,9 +306,9 @@ VIEW = MS + r'''
   <section class="bt-intro">
     <div class="no">핵심 기여 · Key Contributions</div>
     <h2>알고리즘(중심점 · 1*)과 하드웨어(비격자 5단계 타일링)를 맞물려, 기존 문맥적 희소성의 대형 배치 한계를 돌파했다</h2>
-    <p>기존 문맥적 희소성 연구는 단일 요청(<span class="mono">B=1</span>)에만 머물거나 대형 배치에서 활성 뉴런 합집합이 100%에 육박해 붕괴했다. <b style="color:var(--fg);font-weight:600">Roster</b>는 ① 중심점별 앞쪽 몰기(<span class="mono">1*</span>) × 비격자 5단계 타일 커버링, ② 라우터 없는 유한 중심점 가변 명단 + 배치 자동 합승, ③ 단일 요청과 대형 서버 배치를 모두 뚫은 실측 코디자인이라는 <b style="color:var(--fg);font-weight:600">3가지 핵심 축</b>으로 이 벽을 정면 돌파했다.</p>
+    <p>기존 문맥적 희소성 연구는 단일 요청(<span class="mono">B=1</span>)에만 머물거나 대형 배치에서 활성 뉴런 합집합이 100%에 육박해 붕괴했다. <b style="color:var(--fg);font-weight:600">Roster</b>는 ① 중심점별 앞쪽 몰기(<span class="mono">1*</span>) × 비격자 5단계 타일 커버링, ② 학습된 라우터 없이 256 중심점 내적 1회로 가변 명단을 정해 같은 중심점 토큰끼리 쓰는 뉴런이 100% 겹치게 하는 구조, ③ 단일 요청과 대형 서버 배치를 모두 뚫은 실측 코디자인이라는 <b style="color:var(--fg);font-weight:600">3가지 핵심 축</b>으로 이 벽을 정면 돌파했다.</p>
     <div class="stats">
-      <div class="stat"><div class="v num on">3가지 핵심 축</div><div class="k">1* × 비격자 타일링 · 유한 중심점 합승 · 대형 배치 돌파</div></div>
+      <div class="stat"><div class="v num on">3가지 핵심 축</div><div class="k">1* × 비격자 타일링 · 같은 중심점 겹침 · 대형 배치 돌파</div></div>
       <div class="stat"><div class="v num" style="color:var(--neg)">5.33 ~ 6.55배</div><div class="k">단일 요청(B=1) RTX 4060 실측 · 정확도 99.63%</div></div>
       <div class="stat"><div class="v num on">최대 2.72배</div><div class="k">대형 서버(B=512 ~ 2,048) 실측 · 정확도 99.59%</div></div>
     </div>
@@ -318,13 +318,13 @@ VIEW = MS + r'''
     <div class="txt">
       <div class="no">핵심 기여 1 · 중심점별 앞쪽 몰기(1*) × 비격자 5단계 타일 커버링</div>
       <h2>중심점마다 ‘꺼도 되는 1(1*)’ 자유도를 심어 두고, 비격자 5단계 타일이 행·열을 자유롭게 짝지어 취사선택한다</h2>
-      <p class="key">기존 연구는 모든 입력에 같은 앞쪽 뉴런만 쓰거나(MatFormer), 입력 표의 1을 단 한 칸도 못 건드리는 고정 제약(PIT · TileSpMM) 아래서 타일을 짠다.</p>
+      <p class="key">기존 연구는 모든 입력에 같은 앞쪽 뉴런만 쓰거나(MatFormer), 입력 표의 1을 단 한 칸도 못 건드리는 고정 제약(BSMR · Fused3S · TC-GNN · PIT) 아래서 타일을 짠다.</p>
       <ul>
         <li><b>중심점별 동적 앞쪽 몰기 (<span class="mono">1*</span> 생성):</b> 사후 학습에서 각 중심점마다 <b>서로 다른 고유 순위</b>로 에너지를 앞쪽에 몰아, 끝쪽 10%를 꺼도 정확도가 유지되는 유연한 버퍼(<span class="mono">1*</span>, Don't-Care)로 분리한다.</li>
-        <li><b>비격자 자유 행·열 조합:</b> 전역 1D 행·열 줄 세우기(RCM·BCSR)의 가로 경계를 깨고, <b>타일마다 독립된 행·열 집합을 자유롭게 짝지어</b> GPU 텐서 코어 틀을 0 낭비 없이 빽빽하게 채운다.</li>
-        <li><b>실측 GPU 비용 사다리 + <span class="mono">1*</span> 자동 정리:</b> <span class="mono">64×32 → 32×32 → 32×16 → 16×16 → 8×16</span> 실측 비용 사다리 위에서 <b>이미 열린 타일 안의 <span class="mono">1*</span>은 공짜 ON, 새 타일을 여는 외딴 <span class="mono">1*</span>은 자동 OFF</b>해 저속 <span class="mono">8×16</span> 비중을 <b>0.2%</b>까지 줄이고 정확도 <b>99.59%</b>를 지켰다.</li>
+        <li><b>비격자 자유 행·열 조합:</b> 최신 SDDMM(<b>BSMR · Fused3S · TC-GNN</b>)의 고정 행 패널 경계를 깨고, <b>타일마다 독립된 행·열 집합을 자유롭게 짝지어</b> GPU 텐서 코어 틀을 0 낭비 없이 빽빽하게 채운다. (Park 등 2026-05 서베이도 토큰·뉴런 블록 그룹핑을 가장 유망한 미해결 과제로 지목했다.)</li>
+        <li><b>밀도 무관 5단계 비용 사다리 + <span class="mono">1*</span> 자동 정리:</b> <span class="mono">64×32 → 32×32 → 32×16 → 16×16 → 8×16</span> 실측 비용 사다리로 저밀도(층 3·4, 1~6%)부터 중·고밀도(층 1·2, 20%+)까지 전 구간에 대응한다. <b>이미 열린 타일 안의 <span class="mono">1*</span>은 공짜 ON, 새 타일을 여는 외딴 <span class="mono">1*</span>은 자동 OFF</b>해 저속 <span class="mono">8×16</span> 비중을 <b>0.2%</b>까지 줄이고 정확도 <b>99.59%</b>를 지켰다.</li>
       </ul>
-      <p class="note">오른쪽 칩을 차례로 눌러 같은 <span class="mono">6×12</span> 표 위에서 ① 기존 정적 몰기(MatFormer), ② 기존 SpMM(1D 재배열), ③ 중심점별 앞쪽 몰기(<span class="mono">1*</span>), ④ <span class="mono">1*</span> × 비격자 5단계 커버링을 같은 스케일로 비교해 보라.</p>
+      <p class="note">오른쪽 칩을 차례로 눌러 같은 <span class="mono">6×12</span> 표 위에서 ① 기존 정적 몰기(MatFormer), ② 기존 SDDMM(BSMR · 행 패널 고정), ③ 중심점별 앞쪽 몰기(<span class="mono">1*</span>), ④ <span class="mono">1*</span> × 비격자 5단계 커버링을 같은 스케일로 비교해 보라.</p>
     </div>
     <div class="vis">
       <div class="row" style="justify-content:space-between;gap:6px">
@@ -344,15 +344,15 @@ VIEW = MS + r'''
 
   <section class="step" id="c2">
     <div class="txt">
-      <div class="no">핵심 기여 2 · 라우터 없는 유한 중심점 가변 명단 + 배치 자동 합승</div>
-      <h2>별도 예측기·라우터 없이 내적 1회로 가변 명단을 선제 확정하고, 배치가 커질수록 같은 중심점끼리 자동 합승한다</h2>
-      <p class="key">토큰마다 MLP 예측기로 4,096개 중 제각각 고르는 기존 방식(Deja Vu · ShadowLLM)은 배치에서 토큰끼리 겹치지 않아 대형 배치에서 무너진다.</p>
+      <div class="no">핵심 기여 2 · 학습 라우터 없는 유한 중심점 명단 (1번 타일링과의 맞물림 시너지)</div>
+      <h2>학습된 라우터 없이 중심점 내적 1회로 가변 명단을 확정해, 배치가 커질수록 같은 중심점에 속하는 토큰이 많아져 쓰는 뉴런이 잘 겹친다</h2>
+      <p class="key">토큰마다 MLP 예측기로 4,096개 중 제각각 고르는 기존 방식(Deja Vu · ShadowLLM)은 토큰끼리 쓰는 뉴런이 겹치지 않아 대형 배치에서 무너진다.</p>
       <ul>
-        <li><b>라우터·예측기 제거 + 3개 행렬 선제 스킵:</b> 입력 은닉 상태 <span class="mono">h</span>와 256개 중심점의 내적 1회만으로 <b>겹침을 허용하는 가변 길이 명단(<span class="mono">K_j</span>)</b>을 꺼내, <span class="mono">gate · up · down</span> 세 행렬을 계산 전부터 통째로 건너뛴다.</li>
-        <li><b>전문가 경계 손실 제거:</b> 뉴런을 겹침 없는 고정 전문가 조각으로 쪼개고 라우터를 학습하는 MoEfication과 달리, 공용 뉴런은 여러 중심점이 자유롭게 공유한다.</li>
-        <li><b>유한 코드북 → 배치 자동 합승:</b> 중심점이 256개로 유한하므로 배치가 커질수록 <b>같은 중심점을 고른 토큰들이 출력 변화 0%로 자동 합승</b>한다. 배치가 커질수록 느려지는 기존 방식과 반대로, 우리는 배치가 커질수록 0 패딩 없는 큰 덩어리가 저절로 커진다.</li>
+        <li><b>학습 라우터 제거 + 3개 행렬 선제 스킵:</b> 입력 은닉 상태 <span class="mono">h</span>와 256개 중심점의 단순 내적 1회만으로 <b>겹침을 허용하는 가변 길이 명단(<span class="mono">K_j</span>)</b>을 확정해, <span class="mono">gate · up · down</span> 세 행렬을 계산 전부터 통째로 건너뛴다. 고정 전문가로 쪼개고 라우터를 학습하는 MoEfication·CMoE와 달리 공용 뉴런을 자유롭게 공유한다.</li>
+        <li><b>같은 중심점 증가 → 쓰는 뉴런 100% 겹침:</b> 중심점이 256개로 유한하므로 배치가 커질수록 <b>같은 중심점에 속할 가능성이 높아져 쓰는 뉴런이 100% 겹치는 토큰</b>이 늘어난다. 배치가 커질수록 느려지는 기존 방식과 반대로, 0 패딩 없는 큰 덩어리가 저절로 커진다(출력 변화 0%).</li>
+        <li><b>1번 타일링과의 3가지 맞물림 시너지:</b> ① 같은 중심점 토큰들이 동일한 행으로 모여 <span class="mono">64×32</span> 큰 틀의 뼈대를 만들고, ② 중심점별 앞쪽 몰기 순위가 끝쪽 10% <span class="mono">1*</span> 자유도를 공급하며, ③ 고정된 <span class="mono">256×4,096</span> 명단 표 덕분에 열 정렬과 타일 계획 기반을 오프라인으로 준비할 수 있다.</li>
       </ul>
-      <p class="note">오른쪽에서 ① 기존 라우터·예측기와의 구조 비교와 ② 배치 크기(<span class="mono">B=1 → 8,192</span>)에 따른 자동 합승 시뮬레이션을 직접 눌러 보라.</p>
+      <p class="note">오른쪽에서 ① 기존 예측기·라우터와의 구조 비교와 ② 배치 크기(<span class="mono">B=1 → 8,192</span>)가 커질수록 같은 중심점에 속하는 토큰이 늘어 쓰는 뉴런이 겹치는 과정을 직접 눌러 보라.</p>
     </div>
     <div class="vis">
       <div class="row" style="justify-content:space-between;gap:8px">
@@ -372,10 +372,10 @@ VIEW = MS + r'''
     <div class="txt">
       <div class="no">핵심 기여 3 · 대형 배치 FFN 붕괴 돌파 (단일 요청 &amp; 대형 서버 동시 실측)</div>
       <h2>단일 요청은 6.55배 직접 가속, 기존 연구가 포기한 대형 서버 배치에서도 순수 bf16 실측 최대 2.72배를 증명했다</h2>
-      <p class="key">기존 문맥적 희소성(PowerInfer · TurboSparse · CATS)은 단일 요청(B=1) 전용에 머물고, Polar Sparsity는 대형 배치 FFN을 포기하고 어텐션으로 우회했다.</p>
+      <p class="key">기존 문맥적 희소성(PowerInfer · TurboSparse · CATS)은 단일 요청(B=1) 전용에 머물고, Polar Sparsity는 ReLU 작은 배치 합집합만 다룬 채 SwiGLU 대형 배치 FFN을 포기하고 어텐션으로 우회했다. Park 등(2026-05) 서베이 역시 대형 배치에서 밀집 연산으로 돌아가는 한계를 지적했다.</p>
       <ul>
         <li><b>단일 요청 환경 (<span class="mono">B = 1</span> · 로컬/개인 LLM):</b> 타일링과 <span class="mono">1*</span> 탈락 없이 활성 뉴런(13.7%)만 직통 GEMV로 읽어, RTX 4060 실측 <b>5.33배(<span class="mono">d=1,024</span>) · 6.55배(<span class="mono">d=4,096</span>)</b>, 정확도 <b>99.63%</b>를 달성했다.</li>
-        <li><b>대형 서버 환경 (<span class="mono">B = 512 ~ 2,048</span> · Chunked Prefill):</b> 0 마스킹이 <b>1.00 ~ 1.05배</b>로 제자리인 합집합 83% 구간에서, 자동 합승 + <span class="mono">1*</span> + 5단계 <span class="mono">Roster-Tile</span> + L2 열-스트립으로 <b>최대 2.56배(<span class="mono">d=1,024</span>) · 2.72배(<span class="mono">d=4,096</span>)</b>, 정확도 <b>99.59%</b>를 실측했다.</li>
+        <li><b>대형 서버 환경 (<span class="mono">B = 512 ~ 2,048</span> · Chunked Prefill):</b> 합집합으로 합치면 83%가 켜져 0 마스킹이 <b>1.00 ~ 1.05배</b>로 제자리인 구간에서, 토큰별 뉴런 집합을 유지한 채 같은 중심점 뉴런 겹침 + <span class="mono">1*</span> + 5단계 <span class="mono">Roster-Tile</span> + L2 열-스트립으로 <b>최대 2.56배(<span class="mono">d=1,024</span>) · 2.72배(<span class="mono">d=4,096</span>)</b>, 정확도 <b>99.59%</b>를 실측했다.</li>
         <li><b>순수 <span class="mono">bf16</span> · 양자화 없음:</b> 정밀도 손실 없이 구조적 희소성과 텐서 코어 코디자인만으로 얻은 순수 가속이라, 기존 양자화 기법과도 직교 결합이 가능하다.</li>
       </ul>
     </div>
@@ -420,7 +420,7 @@ function tx(p, x, y, s, a = {}) {
   return t;
 }
 
-// ---- 묶기 1: 문제 상황 (6행 x 12열, ① 원래 표 / ② 순서대로 2x3 / ③ 기존 SpMM 최적 1D 재배열) ----
+// ---- 묶기 1: 문제 상황 (6행 x 12열, ① 원래 표 / ② 순서대로 2x3 / ③ 기존 SDDMM: BSMR 행 패널 고정) ----
 const P1_ROWS = ['T1 가', 'T2 나', 'T3 다', 'T4 라', 'T5 마', 'T6 바'];
 const P1_G = [
   [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 2, 0],
@@ -430,12 +430,125 @@ const P1_G = [
   [0, 1, 0, 2, 0, 0, 1, 0, 0, 1, 0, 0],
   [0, 0, 1, 0, 1, 0, 0, 0, 2, 0, 0, 1],
 ];
-// 전수 탐색으로 증명된 P1_G의 이론상 최적 1D SpMM 행·열 재배열 (빈 2x3 틀 4개 생략, 8틀 = 48칸 중 0이 24칸 = 50.0%)
-const P1_SPMM_R = [0, 4, 1, 5, 2, 3];
-const P1_SPMM_C = [0, 3, 6, 1, 8, 11, 2, 4, 5, 7, 9, 10];
+// 전수 탐색으로 증명된 P1_G의 이론상 최적 BSMR (고정 2행 패널 + 패널별 비어 있지 않은 열 밀도 내림차순 정렬)
+// 어떤 2행 패널 분할을 골라도 최소 7틀(42칸 중 ×0 18칸 = 42.9%, 빈 5틀 건너뜀, 틀 #7 1/6은 저밀도 CUDA 우회)
+const P1_BSMR_PANELS = [
+  { tag: '패널 1', rows: [0, 4], cols: [3, 6, 0, 10, 1, 9] },
+  { tag: '패널 2', rows: [1, 5], cols: [8, 11, 1, 5, 2, 4] },
+  { tag: '패널 3', rows: [2, 3], cols: [7, 2, 4, 9, 0, 5, 10, -1, -1] },
+];
+
+function drawBsmrGrid(host, isContrib) {
+  host.innerHTML = '';
+  const W = Math.max(340, host.clientWidth || 540), lx = 58, rx = 10;
+  const cs = Math.min(36, (W - lx - rx) / 12);
+  const top0 = 14, hdrH = 18, panelGap = 14;
+  const panelH = hdrH + 2 * cs;
+  const gridEnd = top0 + 3 * panelH + 2 * panelGap;
+  const H = gridEnd + 36;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 SDDMM BSMR 고정 행 패널 + 패널별 열 정렬 6x12 예시' }, host);
+  const tip = $('#tip');
+
+  let tid = 0;
+  P1_BSMR_PANELS.forEach((P, pi) => {
+    const pTop = top0 + pi * (panelH + panelGap);
+    const yGrid = pTop + hdrH;
+    const nTiles = P.cols.length / 3;
+
+    tx(svg, lx - 8, yGrid - 5, P.tag, { 'text-anchor': 'end', fill: C.pick, 'font-size': 9.5, 'font-weight': 600 });
+    for (let c = 0; c < P.cols.length; c++) {
+      const colIdx = P.cols[c];
+      const lbl = colIdx >= 0 ? 'N' + (colIdx + 1) : '—';
+      tx(svg, lx + c * cs + cs / 2, yGrid - 5, lbl, { 'text-anchor': 'middle', fill: colIdx >= 0 ? C.fg2 : C.fg3, 'font-size': Math.min(10.5, cs * 0.34) });
+    }
+    for (let dr = 0; dr < 2; dr++) {
+      tx(svg, lx - 8, yGrid + dr * cs + cs / 2 + 4, P1_ROWS[P.rows[dr]], { 'text-anchor': 'end', class: 'lab', 'font-size': 11 });
+    }
+
+    for (let dr = 0; dr < 2; dr++) {
+      for (let c = 0; c < 12; c++) {
+        const x = lx + c * cs + 2, y = yGrid + dr * cs + 2, s = cs - 4;
+        const skipped = c >= P.cols.length;
+        const colIdx = skipped ? -1 : P.cols[c];
+        const v = colIdx >= 0 ? P1_G[P.rows[dr]][colIdx] : 0;
+        let fill = skipped ? C.bg : C.off, stroke = 'none', dash = '', op = skipped ? 0.45 : 1;
+        if (!skipped) {
+          if (v === 1) fill = C.on;
+          else if (v === 2) { fill = C.onsoft; stroke = C.on; dash = '3 2'; }
+          else fill = C.pick;
+        }
+        const a = { x, y, width: s, height: s, rx: 3, fill, opacity: op };
+        if (stroke !== 'none') { a.stroke = stroke; a['stroke-width'] = 1.4; if (dash) a['stroke-dasharray'] = dash; }
+        el('rect', a, svg);
+        if (!skipped) {
+          if (v === 2) tx(svg, lx + c * cs + cs / 2, yGrid + dr * cs + cs / 2 + 4, '1*', { 'text-anchor': 'middle', fill: C.on, 'font-size': Math.max(9.5, cs * 0.34), 'font-weight': 600 });
+          else if (v === 0) tx(svg, lx + c * cs + cs / 2, yGrid + dr * cs + cs / 2 + 3.5, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': Math.max(8.5, cs * 0.30), 'font-weight': isContrib ? 600 : 400 });
+        }
+      }
+    }
+
+    for (let bc = 0; bc < 4; bc++) {
+      const x = lx + bc * 3 * cs, y = yGrid, w = 3 * cs, h = 2 * cs;
+      if (bc >= nTiles) {
+        el('rect', { x: x + 1, y: y + 1, width: w - 2, height: h - 2, rx: 4, fill: 'transparent', stroke: C.line2, 'stroke-width': 1, 'stroke-dasharray': '3 3' }, svg);
+        tx(svg, x + w / 2, y + h / 2 + 3.5, '건너뜀', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': Math.max(9.5, cs * 0.30) });
+        continue;
+      }
+      let aCnt = 0;
+      for (let dr = 0; dr < 2; dr++) {
+        for (let dc = 0; dc < 3; dc++) {
+          const ci = P.cols[bc * 3 + dc];
+          if (ci >= 0 && P1_G[P.rows[dr]][ci] > 0) aCnt++;
+        }
+      }
+      tid++;
+      const zCnt = 6 - aCnt, isTail = aCnt <= 1;
+      const box = el('rect', {
+        x: x + 0.5, y: y + 0.5, width: w - 1, height: h - 1, rx: 4, fill: 'transparent',
+        stroke: isTail ? C.pick : C.fg, 'stroke-width': isTail ? 1.8 : 1.3, 'stroke-opacity': isTail ? 0.95 : 0.72,
+        ...(isTail ? { 'stroke-dasharray': '4 2' } : {}),
+        style: 'cursor:pointer',
+      }, svg);
+      const idC = tid, aC = aCnt, zC = zCnt, pTag = P.tag, tailC = isTail;
+      box.addEventListener('pointerenter', ev => {
+        box.setAttribute('stroke', isContrib ? C.pick : C.on); box.setAttribute('stroke-width', 2.2); box.setAttribute('stroke-opacity', 1);
+        tip.hidden = false;
+        tip.textContent = tailC
+          ? `BSMR ${pTag} 틀 #${idC} (2×3): 쓰는 1* = ${aC}칸 · 빈칸 = ${zC}칸 (${Math.round(100 * aC / 6)}%) — 저밀도라 BSMR은 CUDA 코어 우회 (1* 못 끔)`
+          : `BSMR ${pTag} 틀 #${idC} (2×3): 쓰는 1 = ${aC}칸 · 불필요한 0 = ${zC}칸 (채움 ${Math.round(100 * aC / 6)}%)`;
+        tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px';
+        tip.style.top = (ev.clientY - 34) + 'px';
+      });
+      box.addEventListener('pointermove', ev => {
+        tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px';
+        tip.style.top = (ev.clientY - 34) + 'px';
+      });
+      box.addEventListener('pointerleave', () => {
+        box.setAttribute('stroke', tailC ? C.pick : C.fg); box.setAttribute('stroke-width', tailC ? 1.8 : 1.3); box.setAttribute('stroke-opacity', tailC ? 0.95 : 0.72);
+        tip.hidden = true;
+      });
+    }
+
+    if (pi < 2) {
+      const yDiv = yGrid + 2 * cs + panelGap / 2;
+      el('line', { x1: 4, x2: lx + 12 * cs + 4, y1: yDiv, y2: yDiv, stroke: C.pick, 'stroke-width': 1.6, 'stroke-dasharray': '5 3', opacity: 0.92 }, svg);
+    }
+  });
+
+  const cx = lx + 6 * cs;
+  const line1 = W < 470
+    ? '주황 점선 = 고정 행 패널 (패널별 열 정렬 · 1* 못 끔)'
+    : '주황 점선 = 고정 행 패널 경계 (패널마다 열을 따로 정렬해도 행 짝 고정 + 1* 못 끔)';
+  const line2 = W < 470
+    ? '점선 틀 #7 (1/6 · N11*): 저밀도 꼬리 → CUDA 코어 우회'
+    : '점선 틀 #7 (1/6 · N11*): 저밀도 꼬리 → BSMR은 CUDA 코어 우회 (우리는 N11* 자동 OFF)';
+  tx(svg, cx, gridEnd + 14, line1, { 'text-anchor': 'middle', fill: C.pick, 'font-size': W < 470 ? 8.8 : 9.8, 'font-weight': 600 });
+  tx(svg, cx, gridEnd + 29, line2, { 'text-anchor': 'middle', class: 'lab', 'font-size': W < 470 ? 8.6 : 9.4 });
+}
+
 function drawProb() {
   const btns = $('#bt-p1-btns'); btns.innerHTML = '';
-  ['① 토큰 × 뉴런 표', '② 순서대로 틀(2×3) 끼우기', '③ 기존 SpMM (1D 재배열)'].forEach((label, idx) => {
+  ['① 토큰 × 뉴런 표', '② 순서대로 틀(2×3) 끼우기', '③ 기존 SDDMM (BSMR · 행 패널)'].forEach((label, idx) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
     b.textContent = label; b.setAttribute('aria-pressed', st.p1 === idx);
     b.onclick = () => { st.p1 = idx; drawProb(); };
@@ -444,61 +557,57 @@ function drawProb() {
   const caps = [
     '토큰 6개 × 뉴런 12개 · 1이 산발적으로 흩어짐',
     '2×3 틀 12개 · 모든 틀에 불필요한 0이 4칸씩',
-    '최적 1D 행·열 줄 세우기 · 빈 4틀 생략해도 가로 경계선 때문에 절반이 0',
+    '고정 2행 패널 + 패널별 열 정렬 · 빈 5틀 건너뛰어도 7틀 중 42.9%가 ×0 (꼬리 1/6 우회)',
   ];
   $('#bt-p1-cap').textContent = caps[st.p1];
 
-  const isSpmm = st.p1 === 2;
-  const rOrd = isSpmm ? P1_SPMM_R : [0, 1, 2, 3, 4, 5];
-  const cOrd = isSpmm ? P1_SPMM_C : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-  const cellVal = (r, c) => P1_G[rOrd[r]][cOrd[c]];
+  const host = $('#bt-p1-svg');
+  if (st.p1 === 2) {
+    drawBsmrGrid(host, false);
+    $('#bt-p1-kpi').innerHTML =
+      `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
+       <div class="panel"><div class="k">최적 BSMR (행 패널 고정 · 7틀 · 빈 5틀 생략)</div><div class="v pick">×0 18칸 (42.9%) <span style="font-size:11.5px;color:var(--fg-3)">· 틀 #7 CUDA 우회</span></div></div>`;
+    return;
+  }
 
-  // Precompute active 2x3 blocks (all 12 active in mode 1; 8 active + 4 skipped in mode 2)
+  host.innerHTML = '';
+  const cellVal = (r, c) => P1_G[r][c];
   const blkAct = Array.from({ length: 3 }, (_, br) => Array.from({ length: 4 }, (_, bc) => {
     let cnt = 0;
     for (let dr = 0; dr < 2; dr++) for (let dc = 0; dc < 3; dc++) if (cellVal(br * 2 + dr, bc * 3 + dc) > 0) cnt++;
     return cnt;
   }));
 
-  const host = $('#bt-p1-svg'); host.innerHTML = '';
   const W = Math.max(320, host.clientWidth || 540), lx = 58, rx = 10, top = 28;
   const cs = Math.min(36, (W - lx - rx) / 12), H = top + 6 * cs + 14;
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '토큰 6개 x 뉴런 12개 표, 순서대로 2x3 끼우기, 기존 SpMM 1D 재배열 비교' }, host);
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '토큰 6개 x 뉴런 12개 표와 순서대로 2x3 틀 끼우기 비교' }, host);
   const tip = $('#tip');
 
   tx(svg, lx - 8, top - 9, '뉴런', { 'text-anchor': 'end' });
-  for (let c = 0; c < 12; c++) tx(svg, lx + c * cs + cs / 2, top - 9, 'N' + (cOrd[c] + 1), { 'text-anchor': 'middle' });
-  for (let r = 0; r < 6; r++) tx(svg, lx - 8, top + r * cs + cs / 2 + 4, P1_ROWS[rOrd[r]], { 'text-anchor': 'end', class: 'lab' });
+  for (let c = 0; c < 12; c++) tx(svg, lx + c * cs + cs / 2, top - 9, 'N' + (c + 1), { 'text-anchor': 'middle' });
+  for (let r = 0; r < 6; r++) tx(svg, lx - 8, top + r * cs + cs / 2 + 4, P1_ROWS[r], { 'text-anchor': 'end', class: 'lab' });
 
   for (let r = 0; r < 6; r++) {
     for (let c = 0; c < 12; c++) {
       const v = cellVal(r, c), x = lx + c * cs + 2, y = top + r * cs + 2, s = cs - 4;
-      const br = r >> 1, bc = Math.floor(c / 3);
-      const inTileNow = st.p1 === 1 || (isSpmm && blkAct[br][bc] > 0);
-      const skipped = isSpmm && blkAct[br][bc] === 0;
-      let fill = skipped ? C.bg : C.off, stroke = 'none', dash = '', op = skipped ? 0.45 : 1;
+      const inTileNow = st.p1 === 1;
+      let fill = C.off, stroke = 'none', dash = '';
       if (v === 1) fill = C.on;
       else if (v === 2) { fill = C.onsoft; stroke = C.on; dash = '3 2'; }
       else if (inTileNow) fill = C.pick;
-      const attrs = { x, y, width: s, height: s, rx: 3, fill, opacity: op };
+      const attrs = { x, y, width: s, height: s, rx: 3, fill };
       if (stroke !== 'none') { attrs.stroke = stroke; attrs['stroke-width'] = 1.4; if (dash) attrs['stroke-dasharray'] = dash; }
       el('rect', attrs, svg);
       if (v === 2) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 4, '1*', { 'text-anchor': 'middle', fill: C.on, 'font-size': Math.max(9.5, cs * 0.34), 'font-weight': 600 });
       else if (v === 0 && inTileNow) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 3.5, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': Math.max(8.5, cs * 0.30) });
     }
   }
-  if (st.p1 >= 1) {
+  if (st.p1 === 1) {
     let tid = 0;
     for (let br = 0; br < 3; br++) {
       for (let bc = 0; bc < 4; bc++) {
         const aCnt = blkAct[br][bc], zCnt = 6 - aCnt;
-        const skip = isSpmm && aCnt === 0;
         const x = lx + bc * 3 * cs, y = top + br * 2 * cs, w = 3 * cs, h = 2 * cs;
-        if (skip) {
-          el('rect', { x: x + 1, y: y + 1, width: w - 2, height: h - 2, rx: 4, fill: 'transparent', stroke: C.line2, 'stroke-width': 1, 'stroke-dasharray': '3 3' }, svg);
-          tx(svg, x + w / 2, y + h / 2 + 3.5, '건너뜀', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': Math.max(9.5, cs * 0.30) });
-          continue;
-        }
         tid++;
         const box = el('rect', { x: x + 0.5, y: y + 0.5, width: w - 1, height: h - 1, rx: 4, fill: 'transparent', stroke: C.fg, 'stroke-width': 1.3, 'stroke-opacity': 0.72, style: 'cursor:pointer' }, svg);
         const idCopy = tid, aCopy = aCnt, zCopy = zCnt;
@@ -519,21 +628,12 @@ function drawProb() {
         });
       }
     }
-    if (isSpmm) {
-      for (const br of [1, 2]) {
-        const y = top + br * 2 * cs;
-        el('line', { x1: lx - 4, x2: lx + 12 * cs + 4, y1: y, y2: y, stroke: C.pick, 'stroke-width': 1.8, 'stroke-dasharray': '5 3', opacity: 0.9 }, svg);
-      }
-    }
   }
-  $('#bt-p1-kpi').innerHTML = st.p1 === 2
+  $('#bt-p1-kpi').innerHTML = st.p1 === 1
     ? `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
-       <div class="panel"><div class="k">최적 1D SpMM (2×3 × 8틀 · 빈 4틀 생략)</div><div class="v pick">불필요한 0이 24칸 (50.0%)</div></div>`
-    : st.p1 === 1
-      ? `<div class="panel"><div class="k">실제 필요한 계산 (1 + 1*)</div><div class="v on">24칸 <span style="font-size:12px;color:var(--fg-3)">/ 72칸 (33.3%)</span></div></div>
-         <div class="panel"><div class="k">순서대로 틀 끼운 결과 (2×3 × 12틀)</div><div class="v pick">불필요한 0이 48칸 (66.7%)</div></div>`
-      : `<div class="panel"><div class="k">표 크기 (세로 토큰 × 가로 뉴런)</div><div class="v">6행 × 12열 = 72칸</div></div>
-         <div class="panel"><div class="k">필요한 뉴런</div><div class="v on">필수 18칸 + 끝쪽 1* 6칸</div></div>`;
+       <div class="panel"><div class="k">순서대로 틀 끼운 결과 (2×3 × 12틀)</div><div class="v pick">불필요한 0이 48칸 (66.7%)</div></div>`
+    : `<div class="panel"><div class="k">표 크기 (세로 토큰 × 가로 뉴런)</div><div class="v">6행 × 12열 = 72칸</div></div>
+       <div class="panel"><div class="k">필요한 뉴런</div><div class="v on">필수 18칸 + 끝쪽 1* 6칸</div></div>`;
 }
 
 // ---- 묶기 2: 5단계 다중 크기 순위 Roster-Tile 7단계 예시 (8행 x 12열, 1/8 축소판 8x4 -> 4x4 -> 4x2 -> 2x2 -> 1x2) ----
@@ -745,7 +845,7 @@ function drawCache() {
   };
 
   if (st.cache === 0) {
-    tx(svg, pad, 16, '원래 뉴런 순서 (같이 쓰이는 짝: 청록 N1·N3·N5·N7 / 보라 N2·N4·N6·N8이 뒤섞임)', { class: 'hi', 'font-size': 11 });
+    tx(svg, pad, 16, W < 470 ? '원래 순서 (청록 N1·3·5·7 / 보라 N2·4·6·8 뒤섞임)' : '원래 뉴런 순서 (같이 쓰이는 짝: 청록 N1·N3·N5·N7 / 보라 N2·N4·N6·N8이 뒤섞임)', { class: 'hi', 'font-size': W < 470 ? 9.8 : 11 });
     C_ORIG.forEach((n, i) => drawNeuron(bx(i), 24, 28, n, false));
 
     const l2W = Math.min(barW, Math.max(250, barW * 0.62)), l2X = pad + (barW - l2W) / 2;
@@ -828,7 +928,7 @@ function drawCache() {
     ? `<div class="panel"><div class="k">큰 모델(d=4,096) 캐싱 없을 때</div><div class="v pick">실측 1.11 ~ 1.68배 <span style="font-size:12px;color:var(--fg-3)">(L2 넘침으로 재읽기 발생)</span></div></div>
        <div class="panel"><div class="k">작은 모델(d=1,024 · RTX 4060)</div><div class="v">1.0배 <span style="font-size:12px;color:var(--fg-3)">(층 24MB &lt; L2 32MB라 통째로 들어감)</span></div></div>`
     : `<div class="panel"><div class="k">실제 4,096열 적용 (512열 × 8구역)</div><div class="v on">1.68 ~ 2.72배 <span style="font-size:12px;color:var(--fg-3)">(캐싱 X 1.11 ~ 1.68배 대비 · 중복 0%)</span></div></div>
-       <div class="panel"><div class="k">8구역 병렬 + 합승 5단계 계획</div><div class="v">${B.strip_meta.runtime_1024.toFixed(2)}초 <span style="font-size:12px;color:var(--fg-3)">(전역 23.5초 대비 10배 단축)</span></div></div>`;
+       <div class="panel"><div class="k">8구역 병렬 + 중심점 묶기 5단계 계획</div><div class="v">${B.strip_meta.runtime_1024.toFixed(2)}초 <span style="font-size:12px;color:var(--fg-3)">(전역 23.5초 대비 10배 단축)</span></div></div>`;
 }
 
 // ---- 묶기 5: 이론 상한 (단일 요청 vs 실제 서버) 차트 + 표 ----
@@ -1035,7 +1135,7 @@ const C1_NG_TILES = [
 
 function drawC1() {
   const btns = $('#ct-c1-btns'); btns.innerHTML = '';
-  ['① MatFormer (정적)', '② 기존 SpMM (1D)', '③ 중심점 앞쪽 몰기 (1*)', '④ 우리: 1* × 비격자'].forEach((label, idx) => {
+  ['① MatFormer (정적)', '② 기존 SDDMM (BSMR)', '③ 중심점 앞쪽 몰기 (1*)', '④ 우리: 1* × 비격자'].forEach((label, idx) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
     b.textContent = label; b.setAttribute('aria-pressed', st.c1 === idx);
     b.onclick = () => { st.c1 = idx; drawC1(); };
@@ -1043,9 +1143,9 @@ function drawC1() {
   });
   const caps = [
     '같은 6×12 표 · 모든 토큰에 앞 4개(N1~N4) 전역 고정 → 문맥 뉴런 대거 누락',
-    '같은 6×12 표 · 최적 1D 행·열 재배열 · 빈 4틀 생략해도 가로 경계선에 막혀 50%가 ×0',
+    '같은 6×12 표 · 고정 행 패널 + 패널별 열 정렬 · 빈 5틀 건너뛰어도 7틀 중 42.9%가 ×0',
     '중심점마다 고유 순위로 앞쪽에 몰고 끝쪽 10%를 1*(Don\'t-Care)로 분리',
-    '같은 6×12 표 · 타일마다 행·열 자유 조합 + 외딴 1* 자동 OFF → 8틀→5틀, ×0 24→8칸',
+    '같은 6×12 표 · 타일마다 행·열 자유 조합 + 외딴 1* 자동 OFF → 7틀→5틀, ×0 18→8칸',
   ];
   $('#ct-c1-cap').textContent = caps[st.c1];
 
@@ -1118,8 +1218,13 @@ function drawC1() {
     }
     const yBot = top + 6 * cs + 10;
     el('path', { d: `M ${lx} ${yBot - 3} L ${lx} ${yBot + 2} L ${lx + 4 * cs} ${yBot + 2} L ${lx + 4 * cs} ${yBot - 3}`, fill: 'none', stroke: C.on, 'stroke-width': 1.3 }, svg);
-    tx(svg, lx + 2 * cs, yBot + 17, '↑ 전역 앞 4열 고정 (×0 17칸)', { 'text-anchor': 'middle', fill: C.on, 'font-size': 10, 'font-weight': 600 });
-    tx(svg, lx + 8 * cs, yBot + 17, '← N5~N12 문맥별 필수 뉴런 12개 누락 (정확도 붕괴)', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 10, 'font-weight': 600 });
+    if (W < 470) {
+      tx(svg, lx + 2 * cs, yBot + 17, '↑ 앞 4열 고정 (×0 17)', { 'text-anchor': 'middle', fill: C.on, 'font-size': 8.6, 'font-weight': 600 });
+      tx(svg, lx + 8 * cs, yBot + 17, '← N5~12 필수 12개 누락', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 8.6, 'font-weight': 600 });
+    } else {
+      tx(svg, lx + 2 * cs, yBot + 17, '↑ 전역 앞 4열 고정 (×0 17칸)', { 'text-anchor': 'middle', fill: C.on, 'font-size': 10, 'font-weight': 600 });
+      tx(svg, lx + 8 * cs, yBot + 17, '← N5~N12 문맥별 필수 뉴런 12개 누락 (정확도 붕괴)', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 10, 'font-weight': 600 });
+    }
 
     leg.innerHTML =
       '<span><i style="background:var(--on)"></i>고정 구간 적중 (6칸)</span>' +
@@ -1130,81 +1235,17 @@ function drawC1() {
       `<div class="panel"><div class="k">전역 정적 고정 (MatFormer · N1~N4)</div><div class="v pick" style="font-size:15.5px">필수 뉴런 12 / 18 누락 (66.7%)</div></div>
        <div class="panel"><div class="k">문맥 특화 한계</div><div class="v" style="font-size:15px">중심점마다 다른 앞쪽 뉴런 선택 불가</div></div>`;
   } else if (st.c1 === 1) {
-    // ② 기존 SpMM (이론상 최적 1D 행·열 재배열 · 고정 1) — 묶기 1과 동일한 6×12 대형 스케일!
-    const lx = 58, rx = 10, top = 34;
-    const cs = Math.min(36, (W - lx - rx) / 12), H = top + 6 * cs + 28;
-    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 SpMM 이론상 최적 1D 행열 재배열 6x12 예시' }, host);
-    const cellVal = (r, c) => P1_G[P1_SPMM_R[r]][P1_SPMM_C[c]];
-    const blkAct = Array.from({ length: 3 }, (_, br) => Array.from({ length: 4 }, (_, bc) => {
-      let cnt = 0;
-      for (let dr = 0; dr < 2; dr++) for (let dc = 0; dc < 3; dc++) if (cellVal(br * 2 + dr, bc * 3 + dc) > 0) cnt++;
-      return cnt;
-    }));
-
-    tx(svg, lx - 8, top - 11, '뉴런', { 'text-anchor': 'end', 'font-size': 10.5 });
-    for (let c = 0; c < 12; c++) tx(svg, lx + c * cs + cs / 2, top - 11, 'N' + (P1_SPMM_C[c] + 1), { 'text-anchor': 'middle', 'font-size': 10.5 });
-    for (let r = 0; r < 6; r++) tx(svg, lx - 8, top + r * cs + cs / 2 + 4, P1_ROWS[P1_SPMM_R[r]], { 'text-anchor': 'end', class: 'lab', 'font-size': 11 });
-
-    for (let r = 0; r < 6; r++) {
-      for (let c = 0; c < 12; c++) {
-        const v = cellVal(r, c), x = lx + c * cs + 2, y = top + r * cs + 2, s = cs - 4;
-        const br = r >> 1, bc = Math.floor(c / 3);
-        const skipped = blkAct[br][bc] === 0;
-        let fill = skipped ? C.bg : C.off, stroke = 'none', dash = '', op = skipped ? 0.45 : 1;
-        if (v === 1) fill = C.on;
-        else if (v === 2) { fill = C.onsoft; stroke = C.on; dash = '3 2'; }
-        else if (!skipped) fill = C.pick;
-        const a = { x, y, width: s, height: s, rx: 3, fill, opacity: op };
-        if (stroke !== 'none') { a.stroke = stroke; a['stroke-width'] = 1.4; if (dash) a['stroke-dasharray'] = dash; }
-        el('rect', a, svg);
-        if (v === 2) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 4, '1*', { 'text-anchor': 'middle', fill: C.on, 'font-size': Math.max(9.5, cs * 0.34), 'font-weight': 600 });
-        else if (v === 0 && !skipped) tx(svg, lx + c * cs + cs / 2, top + r * cs + cs / 2 + 3.5, '×0', { 'text-anchor': 'middle', fill: C.bg, 'font-size': Math.max(8.5, cs * 0.30), 'font-weight': 600 });
-      }
-    }
-    let tid = 0;
-    for (let br = 0; br < 3; br++) {
-      for (let bc = 0; bc < 4; bc++) {
-        const aCnt = blkAct[br][bc], zCnt = 6 - aCnt;
-        const x = lx + bc * 3 * cs, y = top + br * 2 * cs, w = 3 * cs, h = 2 * cs;
-        if (aCnt === 0) {
-          el('rect', { x: x + 1, y: y + 1, width: w - 2, height: h - 2, rx: 4, fill: 'transparent', stroke: C.line2, 'stroke-width': 1, 'stroke-dasharray': '3 3' }, svg);
-          tx(svg, x + w / 2, y + h / 2 + 3.5, '건너뜀', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': Math.max(9.5, cs * 0.30) });
-          continue;
-        }
-        tid++;
-        const box = el('rect', { x: x + 0.5, y: y + 0.5, width: w - 1, height: h - 1, rx: 4, fill: 'transparent', stroke: C.fg, 'stroke-width': 1.3, 'stroke-opacity': 0.72, style: 'cursor:pointer' }, svg);
-        const idC = tid, aC = aCnt, zC = zCnt;
-        box.addEventListener('pointerenter', ev => {
-          box.setAttribute('stroke', C.pick); box.setAttribute('stroke-width', 2.2); box.setAttribute('stroke-opacity', 1);
-          tip.hidden = false;
-          tip.textContent = `1D SpMM 틀 #${idC} (2×3): 쓰는 1 = ${aC}칸 · 불필요한 0 = ${zC}칸 (채움 ${Math.round(100 * aC / 6)}%)`;
-          tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px';
-          tip.style.top = (ev.clientY - 34) + 'px';
-        });
-        box.addEventListener('pointermove', ev => {
-          tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 12) + 'px';
-          tip.style.top = (ev.clientY - 34) + 'px';
-        });
-        box.addEventListener('pointerleave', () => {
-          box.setAttribute('stroke', C.fg); box.setAttribute('stroke-width', 1.3); box.setAttribute('stroke-opacity', 0.72);
-          tip.hidden = true;
-        });
-      }
-    }
-    for (const br of [1, 2]) {
-      const y = top + br * 2 * cs;
-      el('line', { x1: lx - 4, x2: lx + 12 * cs + 4, y1: y, y2: y, stroke: C.pick, 'stroke-width': 1.8, 'stroke-dasharray': '5 3', opacity: 0.92 }, svg);
-    }
-    tx(svg, lx + 6 * cs, top + 6 * cs + 18, '주황 점선 = 1D 가로 조 경계선 (한 번 정한 행 짝을 다른 열에서 못 바꿈 + 외딴 1* 못 끔)', { 'text-anchor': 'middle', fill: C.pick, 'font-size': 10, 'font-weight': 600 });
+    // ② 기존 SDDMM (BSMR · 고정 2행 패널 + 패널별 열 정렬 · 고정 1) — 묶기 1과 동일한 6×12 대형 스케일!
+    drawBsmrGrid(host, true);
 
     leg.innerHTML =
       '<span><i style="background:var(--on)"></i>필수 뉴런 (1)</span>' +
       '<span><i style="background:var(--on-soft);box-shadow:inset 0 0 0 1.5px var(--on)"></i>끄지 못하는 1* (고정 1 제약)</span>' +
-      '<span><i style="background:var(--pick)"></i>틀 안 불필요한 0 (×0 · 24칸)</span>' +
-      '<span><i style="background:var(--off)"></i>건너뛴 빈 틀 (4개)</span>';
+      '<span><i style="background:var(--pick)"></i>틀 안 불필요한 0 (×0 · 18칸)</span>' +
+      '<span><i style="background:var(--off)"></i>건너뛴 빈 틀 (5개)</span>';
     $('#ct-c1-kpi').innerHTML =
-      `<div class="panel"><div class="k">기존 SpMM (최적 1D 재배열 · 2×3)</div><div class="v pick" style="font-size:15px">8틀 (48칸) · ×0 24칸 (50.0%)</div></div>
-       <div class="panel"><div class="k">두 가지 구조적 벽</div><div class="v" style="font-size:14.5px">가로 조 경계 고정 + 외딴 1* 못 끔</div></div>`;
+      `<div class="panel"><div class="k">기존 SDDMM (BSMR · 고정 행 패널 · 2×3)</div><div class="v pick" style="font-size:15px">7틀 (42칸) · ×0 18칸 (42.9%)</div></div>
+       <div class="panel"><div class="k">두 가지 구조적 벽</div><div class="v" style="font-size:14px">고정 행 패널 경계 + 1* 못 끔 (꼬리 CUDA 우회)</div></div>`;
   } else if (st.c1 === 2) {
     // ③ 중심점별 앞쪽 몰기 (1* 생성)
     const H = 258, cur = C1_CENTROIDS[st.c1c];
@@ -1324,9 +1365,9 @@ function drawC1() {
     }
 
     const capTxt = activeTile
-      ? `틀 ${activeTile.tag}: ${activeTile.lbl} (${activeTile.stat}) — 가로 경계 없이 원하는 행·열만 자유 조합!`
-      : '같은 6×12 표에서 T6이 틀 ②는 T2와, 틀 ③은 T3과 자유 짝짓기! (N11 외딴 1* 2개 자동 OFF · 겹침 0칸)';
-    tx(svg, lx + 6 * cs, top + matH + 17, capTxt, { 'text-anchor': 'middle', fill: activeTile ? activeTile.col : C.on, 'font-size': 10, 'font-weight': 600 });
+      ? (W < 470 ? `틀 ${activeTile.tag}: ${activeTile.lbl} (${activeTile.stat})` : `틀 ${activeTile.tag}: ${activeTile.lbl} (${activeTile.stat}) — 가로 경계 없이 원하는 행·열만 자유 조합!`)
+      : (W < 470 ? 'T6이 틀 ②(T2)·③(T3) 자유 짝짓기! (N11* OFF · 겹침 0)' : '같은 6×12 표에서 T6이 틀 ②는 T2와, 틀 ③은 T3과 자유 짝짓기! (N11 외딴 1* 2개 자동 OFF · 겹침 0칸)');
+    tx(svg, W < 470 ? W / 2 : lx + 6 * cs, top + matH + 17, capTxt, { 'text-anchor': 'middle', fill: activeTile ? activeTile.col : C.on, 'font-size': W < 470 ? 8.8 : 10, 'font-weight': 600 });
     el('line', { x1: pad, x2: W - pad, y1: top + matH + 30, y2: top + matH + 30, stroke: C.line, 'stroke-width': 1 }, svg);
 
     // 하단: 실제 B=2,048 5단계 실측 비용 사다리 비중 바
@@ -1355,16 +1396,17 @@ function drawC1() {
       '<span><i style="background:var(--pick)"></i>불필요한 0 (×0 · 단 8칸)</span>' +
       '<span><i style="background:var(--off);box-shadow:inset 0 0 0 1px var(--line-2)"></i>외딴 1* 자동 OFF (2칸)</span>';
     $('#ct-c1-kpi').innerHTML =
-      `<div class="panel"><div class="k">기존 1D SpMM → 우리 비격자 + 1* (같은 6×12 표)</div><div class="v on" style="font-size:14.5px">8틀→5틀 (-38%) · ×0 24→8칸 (-67%)</div></div>
+      `<div class="panel"><div class="k">기존 BSMR(행 패널) → 우리 비격자 + 1* (같은 6×12 표)</div><div class="v on" style="font-size:14.5px">7틀→5틀 (-29%) · ×0 18→8칸 (-56%)</div></div>
        <div class="panel"><div class="k">실제 모델 1·2순위 고속 틀 비중 (B=2,048)</div><div class="v" style="font-size:15px">77.0% <span style="font-size:11.5px;color:var(--fg-3)">(저속 8×16 0.2% · 정확도 99.59%)</span></div></div>`;
   }
 
   // 같은 6×12 표(필수 1 18칸 + 1* 6칸) 한눈 비교표: 네모 틀 수 · 연산할 칸 · 쓸데없는 0 개수 · 필수 1 보존
   const c1Rows = [
-    { m: -1, name: '순서대로 끼우기 (기준)',         tiles: '12틀',    ops: '72칸', opsSub: '(100%)',  z: '48칸', zSub: '(66.7%)', zCls: 'warn', keep: '18 / 18', keepCls: '' },
-    { m: 0,  name: '① 기존: MatFormer (앞 4열)',     tiles: '고정 4열', ops: '24칸', opsSub: '(33.3%)', z: '17칸', zSub: '(70.8%)', zCls: 'warn', keep: '6 / 18 (12 누락)', keepCls: 'warn' },
-    { m: 1,  name: '② 기존: SpMM (최적 1D)',         tiles: '8틀',     ops: '48칸', opsSub: '(66.7%)', z: '24칸', zSub: '(50.0%)', zCls: 'warn', keep: '18 / 18 (1* 못 끔)', keepCls: 'mut' },
-    { m: 3,  name: '④ 우리: 1* × 비격자 커버링',     tiles: '5틀',     ops: '30칸', opsSub: '(41.7%)', z: '8칸',  zSub: '(26.7%)', zCls: 'ok',   keep: '18 / 18 (외딴 1* OFF)', keepCls: 'ok' },
+    { m: -1, name: '순서대로 끼우기 (기준)',         tiles: '12틀',    ops: '72칸', opsSub: '(100%)',  z: '48칸', zSub: '(66.7%)',      zCls: 'warn', keep: '18 / 18', keepCls: '' },
+    { m: 0,  name: '① 기존: MatFormer (앞 4열)',     tiles: '고정 4열', ops: '24칸', opsSub: '(33.3%)', z: '17칸', zSub: '(70.8%)',      zCls: 'warn', keep: '6 / 18 (12 누락)', keepCls: 'warn' },
+    { m: -2, name: '참고: 고전 SpMM (전역 1D)',      tiles: '8틀',     ops: '48칸', opsSub: '(66.7%)', z: '24칸', zSub: '(50.0%)',      zCls: 'warn', keep: '18 / 18 (1* 못 끔)', keepCls: 'mut' },
+    { m: 1,  name: '② 기존: BSMR (행 패널)',         tiles: '7틀',     ops: '42칸', opsSub: '(58.3%)', z: '18칸', zSub: '(42.9%)',      zCls: 'warn', keep: '18 / 18 (1* 못 끔)', keepCls: 'mut' },
+    { m: 3,  name: '④ 우리: 1* × 비격자 커버링',     tiles: '5틀',     ops: '30칸', opsSub: '(41.7%)', z: '8칸',  zSub: '(26.7%)',      zCls: 'ok',   keep: '18 / 18 (외딴 1* OFF)', keepCls: 'ok' },
   ];
   $('#ct-c1-tbl').innerHTML =
     '<tr><th>방식 (같은 6×12 표 · 2×3 틀)</th><th>네모 틀 수</th><th>연산할 칸</th><th>쓸데없는 0 (×0)</th><th>필수 1 보존</th></tr>' +
@@ -1382,13 +1424,15 @@ function drawC1() {
 
 function drawC2() {
   const btns = $('#ct-c2-btns'); btns.innerHTML = '';
-  ['① 구조 비교 (라우터 vs 중심점)', '② 배치 자동 합승 시뮬레이터'].forEach((label, idx) => {
+  ['① 구조 비교 (예측기·라우터 vs 중심점)', '② 배치별 뉴런 겹침 시뮬레이터'].forEach((label, idx) => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip plain';
     b.textContent = label; b.setAttribute('aria-pressed', st.c2 === idx);
     b.onclick = () => { st.c2 = idx; drawC2(); };
     btns.appendChild(b);
   });
-  $('#ct-c2-cap').textContent = st.c2 === 0 ? '선제 선택 구조 · 겹침 허용 · 합승 가능성 비교' : '배치가 커질수록 기존은 붕괴, 우리는 자동 합승으로 가속';
+  $('#ct-c2-cap').textContent = st.c2 === 0
+    ? '학습 라우터 제거 · 뉴런 공유 · 같은 중심점 겹침 비교'
+    : '배치가 커질수록 기존은 합집합 붕괴, 우리는 같은 중심점끼리 뉴런 100% 겹침';
 
   const brow = $('#ct-c2-brow');
   brow.style.display = st.c2 === 1 ? 'flex' : 'none';
@@ -1407,11 +1451,11 @@ function drawC2() {
 
   if (st.c2 === 0) {
     const H = 250;
-    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 라우터·예측기 구조와 Roster 중심점 명단 구조 비교' }, host);
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '기존 예측기·라우터 구조와 Roster 중심점 명단 구조 비교' }, host);
     const rows = [
-      { tag: 'Deja Vu · ShadowLLM', step1: '별도 MLP 예측기', step2: '토큰별 산발 예측', out: '배치 합승 0% (붕괴)', col: C.pick, bg: C.bg3 },
-      { tag: 'MoEfication · MoE',   step1: '학습 라우터',     step2: '겹침 없는 고정 전문가', out: '공용 뉴런 공유 제약', col: C.fg2,  bg: C.bg3 },
-      { tag: 'Roster (우리)',       step1: '256 중심점 내적 1회', step2: '겹침 허용 · 가변 K_j', out: '3행렬 스킵 + 자동 합승', col: C.on, bg: C.onsoft },
+      { tag: 'Deja Vu · ShadowLLM', step1: '별도 MLP 예측기', step2: '토큰별 산발 예측', out: '토큰끼리 안 겹침 (붕괴)', col: C.pick, bg: C.bg3 },
+      { tag: 'MoEfication · CMoE',  step1: '학습 라우터',     step2: '고정 전문가 분할', out: '공용 뉴런 공유 제약', col: C.fg2,  bg: C.bg3 },
+      { tag: 'Roster (우리)',       step1: '256 중심점 내적 1회', step2: '겹침 허용 · 가변 K_j', out: '3행렬 스킵 + 뉴런 100% 겹침', col: C.on, bg: C.onsoft },
     ];
     const gap = 14, innerW = W - 2 * pad - 20, bw = (innerW - 2 * gap) / 3;
     rows.forEach((R, i) => {
@@ -1421,23 +1465,23 @@ function drawC2() {
       [R.step1, R.step2, R.out].forEach((txt, k) => {
         const bx = pad + 10 + k * (bw + gap), by = y + 29;
         el('rect', { x: bx, y: by, width: bw, height: 31, rx: 5, fill: C.bg, stroke: k === 2 ? R.col : C.line, 'stroke-width': k === 2 ? 1.2 : 0.9 }, svg);
-        tx(svg, bx + bw / 2, by + 19.5, txt, { 'text-anchor': 'middle', fill: k === 2 ? R.col : C.fg2, 'font-size': Math.min(10, Math.max(8.5, bw / 14)), 'font-weight': k === 2 ? 600 : 400 });
+        tx(svg, bx + bw / 2, by + 19.5, txt, { 'text-anchor': 'middle', fill: k === 2 ? R.col : C.fg2, 'font-size': Math.min(10, Math.max(8, bw / 14.5)), 'font-weight': k === 2 ? 600 : 400 });
         if (k < 2) tx(svg, bx + bw + gap / 2, by + 19.5, '→', { 'text-anchor': 'middle', fill: C.fg3, 'font-size': 10 });
       });
     });
     $('#ct-c2-kpi').innerHTML =
-      `<div class="panel"><div class="k">별도 예측기 / 라우터 학습</div><div class="v on" style="font-size:15.5px">0개 <span style="font-size:11.5px;color:var(--fg-3)">(중심점 내적 1회 · gate·up·down 스킵)</span></div></div>
-       <div class="panel"><div class="k">뉴런 공유 &amp; 가변 길이</div><div class="v" style="font-size:15.5px">겹침 허용 · 층별 K_j <span style="font-size:11.5px;color:var(--fg-3)">(22% → 1%)</span></div></div>`;
+      `<div class="panel"><div class="k">학습된 예측기 / 라우터</div><div class="v on" style="font-size:15px">0개 <span style="font-size:11.5px;color:var(--fg-3)">(단순 중심점 내적 1회 · 3행렬 스킵)</span></div></div>
+       <div class="panel"><div class="k">1번 타일링과의 맞물림 시너지</div><div class="v" style="font-size:14.5px">겹침 행 + 1* 공급 + 고정 표 <span style="font-size:11.5px;color:var(--fg-3)">(K_j 22%→1%)</span></div></div>`;
   } else {
     const H = 290, bv = st.c2b;
-    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '배치 크기에 따른 기존 합집합 붕괴와 Roster 자동 합승 비교' }, host);
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': '배치 크기에 따른 기존 합집합 붕괴와 Roster 같은 중심점 뉴런 겹침 비교' }, host);
     const half = (W - 2 * pad - 12) / 2, rx0 = pad + half + 12;
 
     const meta = {
-      1:    { union: 14, coal: '1명 / 중심점', comp: '13.7%', note: '타일링 불필요 · GEMV 6.55×' },
-      512:  { union: 96, coal: '2명 / 중심점', comp: '27.9%', note: '자동 합승 시작 · 실측 1.68~1.75×' },
-      2048: { union: 100, coal: '8명 / 중심점', comp: '19.1%', note: '1·2순위 77% · 실측 2.56~2.72×' },
-      8192: { union: 100, coal: '32명 / 중심점', comp: '~14.2%', note: '0 패딩 ~0% · 예상 4~6×' },
+      1:    { union: 14, coal: '1개 / 중심점', comp: '13.7%', note: '타일링 불필요 · GEMV 6.55×' },
+      512:  { union: 96, coal: '평균 2개 / 중심점', comp: '27.9%', note: '같은 중심점 겹침 시작 · 1.68~1.75×' },
+      2048: { union: 100, coal: '평균 8개 / 중심점', comp: '19.1%', note: '1·2순위 77% · 실측 2.56~2.72×' },
+      8192: { union: 100, coal: '평균 32개 / 중심점', comp: '~14.2%', note: '같은 중심점 대거 겹침 · 예상 4~6×' },
     }[bv];
 
     const gRows = 6, gCols = 8;
@@ -1450,8 +1494,8 @@ function drawC2() {
 
     // 좌측: 기존 토큰별 예측 (합집합 붕괴) — 큰 셀 + T1~T6 + ×0 명시
     el('rect', { x: pad, y: 6, width: half, height: H - 12, rx: 8, fill: C.bg3, stroke: C.line2 }, svg);
-    tx(svg, pad + 10, 24, '기존 토큰별 예측 (Deja Vu 등)', { fill: C.pick, 'font-size': 11, 'font-weight': 600 });
-    tx(svg, pad + 10, 40, `배치 B = ${nf(bv)} · 토큰마다 패턴 제각각`, { class: 'lab', 'font-size': 9.8 });
+    tx(svg, pad + 10, 24, '기존 토큰별 예측 (Deja Vu 등)', { fill: C.pick, 'font-size': W < 470 ? 10 : 11, 'font-weight': 600 });
+    tx(svg, pad + 10, 40, `배치 B = ${nf(bv)} · 토큰마다 패턴 제각각`, { class: 'lab', 'font-size': W < 470 ? 8.8 : 9.8 });
 
     for (let r = 0; r < gRows; r++) {
       const showRow = bv === 1 ? r === 0 : true;
@@ -1465,15 +1509,15 @@ function drawC2() {
       }
     }
     const barY = gy0 + gRows * gcs + 22, barW = half - 20;
-    tx(svg, pad + 10, barY, `배치 합집합 밀도: ${meta.union}%`, { fill: meta.union > 80 ? C.pick : C.fg2, 'font-size': 10, 'font-weight': 600 });
+    tx(svg, pad + 10, barY, `배치 합집합 밀도: ${meta.union}%`, { fill: meta.union > 80 ? C.pick : C.fg2, 'font-size': W < 470 ? 9.2 : 10, 'font-weight': 600 });
     el('rect', { x: pad + 10, y: barY + 6, width: barW, height: 11, rx: 3, fill: C.bg }, svg);
     el('rect', { x: pad + 10, y: barY + 6, width: barW * meta.union / 100, height: 11, rx: 3, fill: meta.union > 80 ? C.pick : C.on }, svg);
-    tx(svg, pad + 10, barY + 33, meta.union >= 95 ? '→ 사실상 밀집 연산 (가속 붕괴)' : '→ B=1에서는 희소 (단일만 빠름)', { class: 'lab', 'font-size': 9.8 });
+    tx(svg, pad + 10, barY + 33, meta.union >= 95 ? '→ 사실상 밀집 연산 (가속 붕괴)' : '→ B=1에서는 희소 (단일만 빠름)', { class: 'lab', 'font-size': W < 470 ? 8.8 : 9.8 });
 
-    // 우측: 유한 중심점 Roster (자동 합승) — 큰 셀 + 중심점 A/B/C 합승 라벨
+    // 우측: 유한 중심점 Roster (같은 중심점 토큰끼리 뉴런 100% 겹침)
     el('rect', { x: rx0, y: 6, width: half, height: H - 12, rx: 8, fill: C.bg3, stroke: C.on, 'stroke-width': 1.3 }, svg);
-    tx(svg, rx0 + 10, 24, '유한 중심점 Roster (우리)', { fill: C.on, 'font-size': 11, 'font-weight': 700 });
-    tx(svg, rx0 + 10, 40, `평균 합승: ${meta.coal} (256 중심점)`, { class: 'lab', 'font-size': 9.8 });
+    tx(svg, rx0 + 10, 24, '유한 중심점 Roster (우리)', { fill: C.on, 'font-size': W < 470 ? 10 : 11, 'font-weight': 700 });
+    tx(svg, rx0 + 10, 40, W < 470 ? `같은 중심점: ${meta.coal}` : `같은 중심점: ${meta.coal} (뉴런 100% 겹침)`, { class: 'lab', 'font-size': W < 470 ? 8.8 : 9.6 });
 
     const gxR = rx0 + 36 + (half - 44 - gCols * gcs) / 2;
     const bandCols = [C.on, C.neg, '#4cd69c'];
@@ -1493,15 +1537,15 @@ function drawC2() {
       el('rect', { x: gxR, y: gy0, width: 3 * gcs, height: bRows * gcs, rx: 4, fill: 'none', stroke: C.fg, 'stroke-width': 1.5 }, svg);
       el('rect', { x: gxR + 3 * gcs, y: gy0 + bRows * gcs, width: 3 * gcs, height: bRows * gcs, rx: 4, fill: 'none', stroke: C.fg, 'stroke-width': 1.5 }, svg);
     }
-    tx(svg, rx0 + 10, barY, `실제 연산량: ${meta.comp} (0 패딩 최소화)`, { fill: C.on, 'font-size': 10, 'font-weight': 600 });
+    tx(svg, rx0 + 10, barY, `실제 연산량: ${meta.comp} (0 패딩 최소화)`, { fill: C.on, 'font-size': W < 470 ? 9.2 : 10, 'font-weight': 600 });
     const compNum = parseFloat(meta.comp.replace('~', ''));
     el('rect', { x: rx0 + 10, y: barY + 6, width: barW, height: 11, rx: 3, fill: C.bg }, svg);
     el('rect', { x: rx0 + 10, y: barY + 6, width: barW * compNum / 100, height: 11, rx: 3, fill: C.on }, svg);
-    tx(svg, rx0 + 10, barY + 33, '→ ' + meta.note, { fill: C.on, 'font-size': 9.8, 'font-weight': 500 });
+    tx(svg, rx0 + 10, barY + 33, '→ ' + meta.note, { fill: C.on, 'font-size': W < 470 ? 8.6 : 9.6, 'font-weight': 500 });
 
     $('#ct-c2-kpi').innerHTML =
-      `<div class="panel"><div class="k">배치 B = ${nf(bv)} 평균 합승 인원</div><div class="v on" style="font-size:15.5px">${meta.coal} <span style="font-size:11.5px;color:var(--fg-3)">(출력 100% 동일)</span></div></div>
-       <div class="panel"><div class="k">기존 vs 우리 연산량</div><div class="v" style="font-size:15.5px">기존 ${meta.union}% → <b style="color:var(--on)">우리 ${meta.comp}</b></div></div>`;
+      `<div class="panel"><div class="k">배치 B = ${nf(bv)} 같은 중심점 토큰 수</div><div class="v on" style="font-size:15px">${meta.coal} <span style="font-size:11.5px;color:var(--fg-3)">(쓰는 뉴런 100% 겹침)</span></div></div>
+       <div class="panel"><div class="k">기존 합집합 vs 우리 연산량</div><div class="v" style="font-size:15px">기존 ${meta.union}% → <b style="color:var(--on)">우리 ${meta.comp}</b></div></div>`;
   }
 }
 
@@ -1536,7 +1580,7 @@ function drawC3() {
   el('rect', { x: pad, y: 136, width: W - 2 * pad, height: 122, rx: 8, fill: C.onsoft, stroke: C.on, 'stroke-width': 1.2 }, svg);
   tx(svg, pad + 12, 155, '② 실제 서버 (B = 512 ~ 2,048 · Chunked Prefill) — 합집합 83% 돌파', { fill: C.on, 'font-size': hdrFs, 'font-weight': 700 });
   drawFlow(168, [
-    ['자동 합승 + 1* 자유도', '행 압축 · 외딴 1* OFF'],
+    ['같은 중심점 겹침 + 1*', '뉴런 100% 겹침 · 1* OFF'],
     ['5단계 타일 + L2 스트립', '64×32~8×16 · 재읽기 0%'],
     [`실측 ${H1.rows[2].best_speedup.toFixed(2)}× / ${H4.rows[2].best_speedup.toFixed(2)}×`, 'B=2,048 · 정확도 99.59%'],
   ], C.on);
@@ -1548,16 +1592,17 @@ function drawC3() {
 
   // 선행 연구 대비 한눈 비교 매트릭스 (짧은 기호 + 핵심 키워드, 줄글 제거)
   const cmpRows = [
-    ['Deja Vu · ShadowLLM',       'warn', '× (MLP 예측기)', 'ok', '○', 'warn', '×', 'warn', '× (합집합 붕괴)', 'B=1 · 소배치 중심'],
-    ['PowerInfer · TurboSparse',  'mut',  '△ (dReLU/예측)', 'mut', '△', 'warn', '×', 'warn', '× (로컬 전용)',   '단일 요청 CPU·GPU 오프로드'],
-    ['CATS · TEAL',               'ok',   '○ (임계값)',     'warn', '× (gate 계산)', 'warn', '×', 'mut', '△ (소·중배치)', '학습 불필요 · up/down 스킵'],
-    ['Polar Sparsity',            'mut',  '△ (경량 라우터)', 'warn', '× (FFN 포기)', 'warn', '×', 'warn', '× (어텐션 우회)', '대형 배치는 어텐션만 희소화'],
-    ['기존 SpMM (1D 재배열 · BCSR)', 'mut',  '— (커널 계층)',  'mut', '—', 'warn', '× (고정 1)', 'warn', '× (1D 가로 경계)', '전역 1D 행·열 줄 세우기 한계'],
-    ['PIT · TileSpMM',            'mut',  '— (커널 계층)',  'mut', '—', 'warn', '× (고정 1)', 'mut', '△ (정적/마이크로)', '비격자 Gather · 가변 SpMM'],
-    ['Roster + Roster-Tile (우리)', 'ok', '○ (중심점 1회)', 'ok', '○ (3행렬 전부)', 'ok', '○ (공짜 ON/OFF)', 'ok', '○ (실측 최대 2.72×)', '단일 6.55× · 서버 2.72× (bf16)'],
+    ['Deja Vu · ShadowLLM',           'warn', '× (MLP 예측기)',     'ok',   '○',             'warn', '×',              'warn', '× (합집합 붕괴)',    'B=1 · 소배치 중심'],
+    ['PowerInfer · TurboSparse',      'mut',  '△ (dReLU/예측)',     'mut',  '△',             'warn', '×',              'warn', '× (로컬 전용)',      '단일 요청 CPU·GPU 오프로드'],
+    ['CATS · TEAL',                   'ok',   '○ (임계값)',         'warn', '× (gate 계산)',  'warn', '×',              'mut',  '△ (소·중배치)',      '학습 불필요 · up/down 스킵'],
+    ['CMoE · AWC (2025)',             'mut',  '× / — (라우터·없음)', 'mut',  '○ / —',         'warn', '×',              'mut',  '△ (고정 전문가)',    '고정 분할 라우팅 또는 배치 스케줄링만'],
+    ['Polar Sparsity · Park 등(2026)', 'mut',  '△ (경량 라우터)',    'warn', '× (SwiGLU 포기)', 'warn', '×',              'warn', '× (어텐션 우회)',    'ReLU 합집합 한정 · 대형 FFN 한계 보고'],
+    ['BSMR · Fused3S · TC-GNN',       'mut',  '— (커널 계층)',      'mut',  '—',             'warn', '× (고정 1)',      'mut',  '△ (행 패널 고정)',   '패널별 열 정렬 · 저밀도 CUDA 우회'],
+    ['PIT · TileSpMM',                'mut',  '— (커널 계층)',      'mut',  '—',             'warn', '× (고정 1)',      'mut',  '△ (초저밀도 중심)',  '단일 축 micro-tile · 가변 크기 SpMM'],
+    ['Roster + Roster-Tile (우리)',   'ok',   '○ (중심점 내적 1회)', 'ok',   '○ (3행렬 전부)', 'ok',   '○ (공짜 ON/OFF)', 'ok',   '○ (실측 최대 2.72×)', '저·중·고 전 밀도(1~22%) · B=1 6.55×'],
   ];
   $('#ct-cmp-tbl').innerHTML =
-    '<tr><th>연구 / 기법</th><th>라우터·예측기 없음</th><th>3행렬 선제 스킵</th><th>1* Don\'t-Care 타일링</th><th>대형 배치 FFN 가속</th><th>핵심 특징</th></tr>' +
+    '<tr><th>연구 / 기법</th><th>학습 라우터 없음</th><th>3행렬 선제 스킵</th><th>1* Don\'t-Care 타일링</th><th>대형 배치 FFN 가속</th><th>핵심 특징</th></tr>' +
     cmpRows.map((r, i) => `<tr${i === cmpRows.length - 1 ? ' class="sum"' : ''}>
       <td><b>${r[0]}</b></td>
       <td class="${r[1]}">${r[2]}</td>
