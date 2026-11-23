@@ -731,7 +731,7 @@ footer { color: var(--fg-3); font-size: 12.5px; padding-block: 36px 48px; border
       <ul>
         <li><b>중심점별 동적 앞쪽 몰기 (<span class="mono">1*</span> 생성):</b> 사후 학습에서 각 중심점마다 <b>서로 다른 고유 순위</b>로 에너지를 앞쪽에 몰아, 끝쪽 10%를 꺼도 정확도가 유지되는 유연한 버퍼(<span class="mono">1*</span>, Don't-Care)로 분리한다.</li>
         <li><b>비격자 자유 행·열 조합:</b> 최신 SDDMM(<b>BSMR · Fused3S · TC-GNN</b>)의 고정 행 패널 경계를 깨고, <b>타일마다 독립된 행·열 집합을 자유롭게 짝지어</b> GPU 텐서 코어 틀을 0 낭비 없이 빽빽하게 채운다. (Park 등 2026-05 서베이도 토큰·뉴런 블록 그룹핑을 가장 유망한 미해결 과제로 지목했다.)</li>
-        <li><b>밀도 무관 5단계 비용 사다리 + <span class="mono">1*</span> 자동 정리:</b> <span class="mono">64×32 → 32×32 → 32×16 → 16×16 → 8×16</span> 실측 비용 사다리로 저밀도(층 3·4, 1~6%)부터 중·고밀도(층 1·2, 20%+)까지 전 구간에 대응한다. <b>이미 열린 타일 안의 <span class="mono">1*</span>은 공짜 ON, 새 타일을 여는 외딴 <span class="mono">1*</span>은 자동 OFF</b>해 저속 <span class="mono">8×16</span> 비중을 <b>0.2%</b>까지 줄이고 정확도 <b>99.59%</b>를 지켰다.</li>
+        <li><b>실측 GPU 비용 사다리 + <span class="mono">1*</span> 자동 정리:</b> <span class="mono">64×32 → 32×32 → 32×16 → 16×16 → 8×16</span> 실측 비용 사다리 위에서 <b>이미 열린 타일 안의 <span class="mono">1*</span>은 공짜 ON, 새 타일을 여는 외딴 <span class="mono">1*</span>은 자동 OFF</b>해 저속 <span class="mono">8×16</span> 비중을 <b>0.2%</b>까지 줄이고 정확도 <b>99.59%</b>를 지켰다.</li>
       </ul>
       <p class="note">오른쪽 칩을 차례로 눌러 같은 <span class="mono">6×12</span> 표 위에서 ① 기존 정적 몰기(MatFormer), ② 기존 SDDMM(BSMR · 행 패널 고정), ③ 중심점별 앞쪽 몰기(<span class="mono">1*</span>), ④ <span class="mono">1*</span> × 비격자 5단계 커버링을 같은 스케일로 비교해 보라.</p>
     </div>
@@ -759,7 +759,7 @@ footer { color: var(--fg-3); font-size: 12.5px; padding-block: 36px 48px; border
       <ul>
         <li><b>학습 라우터 제거 + 3개 행렬 선제 스킵:</b> 입력 은닉 상태 <span class="mono">h</span>와 256개 중심점의 단순 내적 1회만으로 <b>겹침을 허용하는 가변 길이 명단(<span class="mono">K_j</span>)</b>을 확정해, <span class="mono">gate · up · down</span> 세 행렬을 계산 전부터 통째로 건너뛴다. 고정 전문가로 쪼개고 라우터를 학습하는 MoEfication·CMoE와 달리 공용 뉴런을 자유롭게 공유한다.</li>
         <li><b>같은 중심점 증가 → 쓰는 뉴런 100% 겹침:</b> 중심점이 256개로 유한하므로 배치가 커질수록 <b>같은 중심점에 속할 가능성이 높아져 쓰는 뉴런이 100% 겹치는 토큰</b>이 늘어난다. 배치가 커질수록 느려지는 기존 방식과 반대로, 0 패딩 없는 큰 덩어리가 저절로 커진다(출력 변화 0%).</li>
-        <li><b>1번 타일링과의 3가지 맞물림 시너지:</b> ① 같은 중심점 토큰들이 동일한 행으로 모여 <span class="mono">64×32</span> 큰 틀의 뼈대를 만들고, ② 중심점별 앞쪽 몰기 순위가 끝쪽 10% <span class="mono">1*</span> 자유도를 공급하며, ③ 고정된 <span class="mono">256×4,096</span> 명단 표 덕분에 열 정렬과 타일 계획 기반을 오프라인으로 준비할 수 있다.</li>
+        <li><b>1번 타일링과의 3가지 맞물림 시너지:</b> ① 같은 중심점 토큰들이 동일한 행으로 모여 <span class="mono">64×32</span> 큰 틀의 뼈대를 만들고, ② 중심점별 앞쪽 몰기 순위가 끝쪽 10% <span class="mono">1*</span> 자유도를 공급하며, ③ 고정된 <span class="mono">256×4,096</span> 명단 표 덕분에 추론 전에 열 정렬과 타일 구조를 미리 준비할 수 있다.</li>
       </ul>
       <p class="note">오른쪽에서 ① 기존 예측기·라우터와의 구조 비교와 ② 배치 크기(<span class="mono">B=1 → 8,192</span>)가 커질수록 같은 중심점에 속하는 토큰이 늘어 쓰는 뉴런이 겹치는 과정을 직접 눌러 보라.</p>
     </div>
@@ -2368,11 +2368,11 @@ function drawC3() {
     ['Deja Vu · ShadowLLM',           'warn', '× (MLP 예측기)',     'ok',   '○',             'warn', '×',              'warn', '× (합집합 붕괴)',    'B=1 · 소배치 중심'],
     ['PowerInfer · TurboSparse',      'mut',  '△ (dReLU/예측)',     'mut',  '△',             'warn', '×',              'warn', '× (로컬 전용)',      '단일 요청 CPU·GPU 오프로드'],
     ['CATS · TEAL',                   'ok',   '○ (임계값)',         'warn', '× (gate 계산)',  'warn', '×',              'mut',  '△ (소·중배치)',      '학습 불필요 · up/down 스킵'],
-    ['CMoE · AWC (2025)',             'mut',  '× / — (라우터·없음)', 'mut',  '○ / —',         'warn', '×',              'mut',  '△ (고정 전문가)',    '고정 분할 라우팅 또는 배치 스케줄링만'],
+    ['CMoE · AWC (2025)',             'mut',  '△ (비학습/미정)',     'mut',  '○ / —',         'warn', '×',              'mut',  '△ (고정 전문가)',    '고정 전문가 분할 · 선택기 미정 코드북'],
     ['Polar Sparsity · Park 등(2026)', 'mut',  '△ (경량 라우터)',    'warn', '× (SwiGLU 포기)', 'warn', '×',              'warn', '× (어텐션 우회)',    'ReLU 합집합 한정 · 대형 FFN 한계 보고'],
     ['BSMR · Fused3S · TC-GNN',       'mut',  '— (커널 계층)',      'mut',  '—',             'warn', '× (고정 1)',      'mut',  '△ (행 패널 고정)',   '패널별 열 정렬 · 저밀도 CUDA 우회'],
-    ['PIT · TileSpMM',                'mut',  '— (커널 계층)',      'mut',  '—',             'warn', '× (고정 1)',      'mut',  '△ (초저밀도 중심)',  '단일 축 micro-tile · 가변 크기 SpMM'],
-    ['Roster + Roster-Tile (우리)',   'ok',   '○ (중심점 내적 1회)', 'ok',   '○ (3행렬 전부)', 'ok',   '○ (공짜 ON/OFF)', 'ok',   '○ (실측 최대 2.72×)', '저·중·고 전 밀도(1~22%) · B=1 6.55×'],
+    ['PIT · TileSpMM',                'mut',  '— (커널 계층)',      'mut',  '—',             'warn', '× (고정 1)',      'mut',  '△ (정적/마이크로)',  '비격자 Gather · 가변 크기 SpMM'],
+    ['Roster + Roster-Tile (우리)',   'ok',   '○ (중심점 내적 1회)', 'ok',   '○ (3행렬 전부)', 'ok',   '○ (공짜 ON/OFF)', 'ok',   '○ (실측 최대 2.72×)', '단일 6.55× · 서버 2.72× (bf16)'],
   ];
   $('#ct-cmp-tbl').innerHTML =
     '<tr><th>연구 / 기법</th><th>학습 라우터 없음</th><th>3행렬 선제 스킵</th><th>1* Don\'t-Care 타일링</th><th>대형 배치 FFN 가속</th><th>핵심 특징</th></tr>' +
