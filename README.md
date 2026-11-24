@@ -7,7 +7,8 @@ RTX 4060 3라운드 교대 CUDA Graph 4층 합계 실측 기준:
 - **단일 요청 (`B = 1`):** `d = 1,024` **6.20×** · `d = 4,096` **6.27×** (0-Mask 대조군 `0.99×`)
 - **대형 서버 (`B = 512 / 1,024 / 2,048`, `d = 4,096`):** 어텐션 중첩 E2E **3.08× / 4.09× / 4.57×** (`A3V4+H2D` 노출 `0.00 ms`, 여유 `2.3~6.4×`) · 중첩 없는 직렬 E2E **1.66× / 2.58× / 3.10×** (0-Mask `1.02~1.03×`, `d = 1,024` GPU FFN **3.00× / 3.83× / 4.32×**)
 
-- **인터랙티브 아키텍처 시각화 (`ROSTER_VIZ`):** https://rhydcdc.github.io/Roster/
+- **인터랙티브 시각 쇼케이스 (`ROSTER_SHOWCASE` · KO/EN):** https://rhydcdc.github.io/Roster/showcase.html
+- **상세 아키텍처 시각화 (`ROSTER_VIZ`):** https://rhydcdc.github.io/Roster/
 - **묶어서 계산 · E2E 실측 바로가기:** https://rhydcdc.github.io/Roster/#batch
 - **핵심 기여 4축 바로가기:** https://rhydcdc.github.io/Roster/#contrib
 - **재현 코드 안내:** [`code/README.md`](code/README.md)
