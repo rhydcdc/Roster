@@ -1,0 +1,120 @@
+<div class="hero">
+  <h1>02 · 단일 요청 (B = 1): 왜 6배 넘게 빨라지나</h1>
+  <p>학습을 마친 모델에 새 토큰 1개가 들어왔을 때(개인 PC, LLM 생성 단계) 실제로 어떻게 계산하는지를 01과 같은 8뉴런·4중심점 예시로 이어 간다.</p>
+  <nav class="toc" aria-label="이 탭의 단계"><a href="#s02-0">성적 · 출발점</a><a href="#s02-1">1 중심점 찾기</a><a href="#s02-2">2 출석부 조회</a><a href="#s02-3">3 FFN 계산</a><a href="#s02-4">4 왜 6배인가</a><a href="#s02-5">5 다음 질문</a></nav>
+</div>
+
+<section class="sec" id="s02-0">
+  <div class="sh"><span class="no">먼저</span><h2>성적과 출발점</h2></div>
+  <p class="lead">베이스 모델은 뉴런을 100% 켜고 시험 정확도 91.02%, 우리 모델은 평균 13.52%만 켜고 베이스 대비 99.77%(90.81%)이며 토큰 1개 계산이 6.20 ~ 6.27배 빠르다.</p>
+  <gt d="02" h="`B = 1` 실측"/>
+  <h3>추론을 시작하기 전에 메모리에 이미 저장된 것 3가지</h3>
+  <div class="cards">
+    <div class="card"><span class="tag">저장된 것 1</span><h4>고정된 중심점 좌표 4개</h4><p>A (1.1, 1.0) · B (2.1, 1.4) · C (-1.1, -1.1) · D (-2.1, -0.7). 층마다 따로 보관한다 (실제 모델은 앞 3층 32개, 4층 256개).</p></div>
+    <div class="card"><span class="tag">저장된 것 2</span><h4>확정된 출석부 (켤 뉴런 번호표)</h4><p>A {N1, N2, N5, N7} (K = 4) · B {N1, N2, N5, N7} (K = 4) · C {N4, N6, N8} (K = 3) · D {N4, N6, N8} (K = 3). 학습이 끝난 중심점에는 이 K개 번호만 남아 있고, 중심점 A에 배정되는 모든 토큰은 종류와 무관하게 항상 똑같은 4개 뉴런을 켠다.</p></div>
+    <div class="card"><span class="tag">저장된 것 3</span><h4>FFN 가중치 행렬 3개</h4><p>뉴런 1개마다 <code>W_gate</code> 1줄, <code>W_up</code> 1줄, <code>W_down</code> 1줄씩 모두 3줄이 있다. 실제 GPU 메모리에서는 <code>W_gate</code>와 <code>W_up</code>의 같은 뉴런 줄을 나란히 붙여 보관하고, 확정된 블록 순서대로 미리 재배치해 두었다.</p></div>
+  </div>
+  <details class="fold"><summary>"확정된 블록 순서대로 미리 재배치"는 무슨 뜻인가 (뉴런이 여러 중심점에 겹칠 때의 예시)</summary><div class="fold-b">
+    <p><b>가중치는 한 벌뿐이고, 뉴런 줄의 순서만 바꿔 저장한다는 뜻이다.</b> 한 뉴런을 여러 중심점이 같이 쓰기 때문에, 중심점마다 가중치를 따로 모아 두지 않는다. 순서는 "이 뉴런을 어느 중심점들이 쓰나"가 비슷한 뉴런끼리 옆자리에 오도록 정한다. 중심점은 <b>읽을 줄 번호 목록(번호표)</b>만 갖고, 추론할 때는 번호표를 보고 그 줄들을 골라 읽는다.</p>
+    <h4>예시: 깔끔하게 이어지지 않는 경우</h4>
+    <p>01의 처음 출석부에서 D가 N1도 쓴다고 가정해 보자.</p>
+    <div class="tw"><table><thead><tr><th>중심점</th><th>켜는 뉴런</th></tr></thead><tbody>
+      <tr><td><b>A</b></td><td>N1, N2, N3, N5, N7, N8</td></tr>
+      <tr><td><b>B</b></td><td>N1, N2, N3, N5, N7</td></tr>
+      <tr><td><b>C</b></td><td>N3, N4, N6, N8</td></tr>
+      <tr><td><b>D</b></td><td><b>N1</b>, N4, N6, N8</td></tr>
+    </tbody></table></div>
+    <p>뉴런 쪽에서 "누가 나를 쓰나"로 뒤집어 보면 이렇다.</p>
+    <div class="tw"><table><thead><tr><th>뉴런</th><th>쓰는 중심점</th></tr></thead><tbody>
+      <tr><td>N2, N5, N7</td><td>A, B</td></tr>
+      <tr><td>N3</td><td>A, B, C</td></tr>
+      <tr><td>N1</td><td>A, B, D</td></tr>
+      <tr><td>N8</td><td>A, C, D</td></tr>
+      <tr><td>N4, N6</td><td>C, D</td></tr>
+    </tbody></table></div>
+    <p>쓰는 중심점이 비슷한 것끼리 붙이면 예를 들어 이렇게 놓인다.</p>
+    <div class="tw"><table><thead><tr><th>줄 번호</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead><tbody>
+      <tr><td><b>뉴런</b></td><td>N2</td><td>N5</td><td>N7</td><td>N3</td><td>N1</td><td>N8</td><td>N4</td><td>N6</td></tr>
+    </tbody></table></div>
+    <div class="tw"><table><thead><tr><th>중심점</th><th>번호표 (읽을 줄)</th><th>이어지나</th></tr></thead><tbody>
+      <tr><td><b>A</b></td><td>0, 1, 2, 3, 4, 5</td><td>이어짐</td></tr>
+      <tr><td><b>B</b></td><td>0, 1, 2, 3, 4</td><td>이어짐</td></tr>
+      <tr><td><b>C</b></td><td>3, <b>5</b>, 6, 7</td><td><b>4번 줄을 건너뜀</b></td></tr>
+      <tr><td><b>D</b></td><td>4, 5, 6, 7</td><td>이어짐</td></tr>
+    </tbody></table></div>
+    <p>C는 3번 줄(N3)을 읽고, 자기가 안 쓰는 4번 줄(N1)을 건너뛴 뒤 5 ~ 7번 줄을 읽는다. N3 줄은 하나뿐이고, A, B, C의 번호표에 똑같이 3이 들어 있다.</p>
+    <h4>순서를 어떻게 바꿔도 하나는 끊긴다</h4>
+    <ul>
+      <li>C와 D는 N4, N6, N8을 같이 쓰고, C는 여기에 N3을, D는 N1을 더 쓴다.</li>
+      <li>C와 D를 둘 다 이으려면 N3과 N1이 "N4 · N6 · N8 덩어리"의 양 끝에 하나씩 붙어야 한다.</li>
+      <li>그런데 B는 N1과 N3을 둘 다 쓰고 N4, N6, N8은 안 쓴다. N1과 N3 사이에 그 셋이 끼면 B가 끊긴다.</li>
+    </ul>
+    <p>그래서 B, C, D 가운데 적어도 하나는 끊길 수밖에 없다. 위 순서는 C 하나가 한 번만 건너뛰게 한 것이다.</p>
+    <h4>끊겨도 드는 비용은 작다</h4>
+    <ul>
+      <li><b>단일 요청:</b> 번호표대로 줄을 읽을 뿐이라, 건너뛰는 곳이 생기는 것이 전부다. 뉴런 한 줄이 2 ~ 8 KB의 연속 덩어리라, 건너뛰는 비용은 대역폭으로 약 6%다(227.4 → 213.9 GB/s). 6.27×는 이 비용을 포함해 잰 값이다.</li>
+      <li><b>대형 배치:</b> 줄을 2개씩 블록으로 보면 C는 블록 (2, 3)과 (4, 5)를 반씩만 쓴다. 03의 "1 0 · 0 1 조각"이 이런 자리이고, 타일링이 열을 다시 짝지어 이 조각들을 모은다.</li>
+      <li><b>실제 모델:</b> 1층은 뉴런 4,096개에 중심점 32개이고 중심점 하나가 약 900개를 켜므로, 뉴런 하나를 평균 7개쯤의 중심점이 같이 쓴다(32 × 900 ÷ 4,096). 이런 끊김이 곳곳에 있는 것이 보통이다.</li>
+    </ul>
+  </div></details>
+</section>
+
+<section class="sec" id="s02-1">
+  <div class="sh"><span class="no">1단계</span><h2>중심점 연산: 새 토큰이 어느 방인지 한 번에 찾기</h2></div>
+  <p class="lead">신경망 라우터(작은 MLP)를 돌리지 않고, 고정된 중심점 4개와의 거리만 한 번 재서 가장 가까운 방을 고른다.</p>
+  <div class="w" data-w="assign"></div>
+  <div class="real"><span class="rl">실제 모델에서는</span><span class="chip">1 ~ 3층: 중심점 32개와 내적 <b>1번</b> (32 × d)</span><span class="chip">FFN 전체 계산량의 <b>0.2% 미만</b></span><span class="chip">어텐션과 <b>동시에</b> 미리 계산</span></div>
+  <p class="sub">거리 제곱 비교는 실제로는 단순 내적 1회다. 실제 LLM에서는 그 층의 <b>어텐션에 들어가기 직전 입력</b>으로 어텐션과 동시에 미리 계산해, 기다리는 시간 자체를 없앤다.</p>
+</section>
+
+<section class="sec" id="s02-2">
+  <div class="sh"><span class="no">2단계</span><h2>출석부 조회: 계산 전에 안 읽을 뉴런부터 통째로 제외</h2></div>
+  <p class="lead">FFN을 시작하기 전에 켤 뉴런 번호표가 이미 정해져 있으므로, 꺼진 뉴런은 곱셈이 아니라 메모리 읽기부터 건너뛴다. 단순히 0을 곱하는 방식과 갈리는 지점이 여기다.</p>
+  <p class="sub">방금 고른 중심점 A의 출석부를 열면 켤 뉴런은 N1, N2, N5, N7 (4개), 끌 뉴런은 N3, N4, N6, N8 (4개)이다. 세 방식을 눌러 견줘 보자.</p>
+  <div class="w" data-w="skip3"></div>
+  <ul class="pts"><li>꺼진 뉴런 4개는 <code>W_gate</code>, <code>W_up</code>, <code>W_down</code> <b>세 행렬 모두에서 메모리(DRAM) 읽기 자체를 건너뛴다.</b></li></ul>
+</section>
+
+<section class="sec" id="s02-3">
+  <div class="sh"><span class="no">3단계</span><h2>켠 뉴런 4줄만 꺼내 FFN 계산 (gate·up → down)</h2></div>
+  <p class="lead">GPU가 실제로 하는 일은 출석부에 적힌 4줄만 메모리에서 꺼내 계산하는 두 단계뿐이다.</p>
+  <div class="w" data-w="ffn4"></div>
+  <details class="fold"><summary>"빽빽하게 만들어 둔다"는 무슨 뜻인가</summary><div class="fold-b">
+    <p>꺼진 뉴런의 자리를 아예 없애고, 켠 뉴런의 값만 빈칸 없이 붙여 둔다는 뜻이다.</p>
+    <ul>
+      <li><b>자리를 그대로 두면:</b> <code>[a1, a2, 0, 0, a5, 0, a7, 0]</code> (길이 8, 꺼진 자리는 0)</li>
+      <li><b>빽빽하게 만들면:</b> <code>[a1, a2, a5, a7]</code> (길이 4)</li>
+    </ul>
+    <p>이렇게 해야 2단계(down)에서 <code>W_down</code>의 4줄만 읽어 곱하면 된다. 길이 8로 두면 0인 자리도 읽고 곱하게 되어, 다 계산한 뒤 0만 곱하는 방식과 같아진다.</p>
+  </div></details>
+  <gf d="02" s="gather" t="원래처럼 쭉 읽지 않고 골라서 긁어 오면(gather) 느려지지 않나? (메모리 저장 방식과 세 상황 비교)"/>
+</section>
+
+<section class="sec" id="s02-4">
+  <div class="sh"><span class="no">4단계</span><h2>왜 줄인 비율만큼 곧바로 6배 넘게 빨라지나</h2></div>
+  <p class="lead">토큰이 1개뿐이면 곱셈·덧셈 양은 아주 적고, 거대한 가중치를 느린 DRAM에서 칩 안으로 실어 나르는 시간이 거의 100%다. 그래서 읽는 양을 줄인 만큼 시간이 줄어든다.</p>
+  <div class="w" data-w="membar"></div>
+  <ul class="pts">
+    <li><b>메모리 바운드:</b> 가중치를 15%만 읽으면 시간도 이론상 1 / 0.15 = 6.67배 가까이 곧바로 줄어든다.</li>
+    <li>토큰이 1개뿐이라 다른 토큰과 맞출 필요가 없어 <b>빈칸(×0)도 0개이고 타일링도 필요 없다.</b></li>
+  </ul>
+  <h3>RTX 4060 층별 실측 (순수 bf16, 양자화 없음)</h3>
+  <p class="sub">실제 시험 토큰 32개 표본(평균 활성 15.0%)으로 4개 층 연속 실행 시간을 쟀다. 모든 층이 L2 캐시를 넘기도록 4층 전체(96 MB / 384 MB)를 이어서 측정했다.</p>
+  <div class="w" data-w="layers1"></div>
+  <gt d="02" h="활성 뉴런 (`K`)"/>
+  <ul class="pts">
+    <li><b>d = 1,024와 d = 4,096의 구분:</b> d = 1,024는 실제 학습한 가중치 그대로 잰 결과이고, d = 4,096은 같은 출석부와 활성 비율을 7B ~ 8B급 대형 LLM 층 폭에 적용해 순수 커널 속도를 잰 결과다.</li>
+    <li><b>보수적 표본과 공정한 베이스:</b> 실측에 뽑은 무작위 32토큰 표본의 평균 활성률은 15.0%(이론 상한 6.67×)로, 전체 10,000장 평균 13.52%보다 오히려 불리한 조건이다. 그 이론 상한의 94%(6.27×)를 실리콘에서 달성했다. 베이스 시간은 cuBLAS와 직접 짠 밀집 GEMV 가운데 더 빠른 쪽을 1.00× 기준으로 삼았다.</li>
+  </ul>
+</section>
+
+<section class="sec" id="s02-5">
+  <div class="sh"><span class="no">5단계</span><h2>왜 여기서 끝나지 않나</h2></div>
+  <p class="lead">토큰 1개(개인 노트북, 온디바이스 생성 단계)는 이렇게 간단히 6.20 ~ 6.27배가 나온다. 그러나 실제 AI 서버에는 한 번에 토큰 512 ~ 2,048개가 동시에 들어온다.</p>
+  <ul class="pts">
+    <li>중심점 A에 속한 토큰(T1)은 {N1, N2, N5, N7}을 켜야 하고, 중심점 C에 속한 토큰(T5)은 {N4, N6, N8}을 켜야 한다.</li>
+    <li>수백 ~ 수천 명의 서로 다른 출석부를 단순히 합쳐 버리면 결국 8개 뉴런을 전부 켜는 꼴이 되어 <b>속도 이득이 1.0×로 무너진다.</b></li>
+    <li>게다가 대형 배치에서는 메모리 읽기보다 <b>GPU 텐서 코어의 네모 틀(행렬곱) 연산량</b>이 시간을 정한다.</li>
+  </ul>
+  <p class="sub">이 대형 배치의 벽을 비격자 5단계 타일링과 512열 구역으로 넘는 것이 다음 탭이다 → <a href="#03">03 배치 타일링</a></p>
+</section>

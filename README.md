@@ -1,38 +1,46 @@
 # Roster
 
-*Layer-differentiated neuron rosters, block-friendly shared post-training, non-grid 5-tier tiling, and sub-3ms AVX2 dispatch for pure-`bf16` FFN acceleration.*
+*Neuron rosters fixed before each FFN layer, sharing-aware post-training, and real-time non-grid 5-tier tiling, for pure-`bf16` FFN acceleration at batch size 1 and at large batches.*
 
-순수 `bf16` FFN 가속 아키텍처 (양자화 없음 · `1* = 0%` 배치 무관 100% 동일 출력 · 10,000장 시험 정확도 **90.81%**, 베이스 91.02%의 **99.77%** · 평균 활성 뉴런 **13.52%**).
-RTX 4060 3라운드 교대 CUDA Graph 4층 합계 실측 기준:
+순수 `bf16` FFN 가속 아키텍처다 (양자화 없음). 평균 <b>13.52%</b>의 뉴런만 켜고, 시험 정확도는 베이스 대비 **99.77%** (90.81%, 베이스 91.02%)다. 배치 크기와 무관하게 출력이 같다 (`1* = 0%`).
+
+RTX 4060에서 잰 4층 합계다 (3라운드 교대 CUDA Graph).
+
 - **단일 요청 (`B = 1`):** `d = 1,024` **6.20×** · `d = 4,096` **6.27×** (0-Mask 대조군 `0.99×`)
-- **대형 서버 (`B = 512 / 1,024 / 2,048`, `d = 4,096`):** 어텐션 중첩 E2E **3.08× / 4.09× / 4.57×** (`A3V4+H2D` 노출 `0.00 ms`, 여유 `2.3~6.4×`) · 중첩 없는 직렬 E2E **1.66× / 2.58× / 3.10×** (0-Mask `1.02~1.03×`, `d = 1,024` GPU FFN **3.00× / 3.83× / 4.32×**)
+- **대형 서버 (`B = 512 / 1,024 / 2,048`, `d = 4,096`):** 어텐션 중첩 E2E **3.08× / 4.09× / 4.57×** (타일 계획이 어텐션 뒤에 드러나는 시간 `0.000 ms`, 0-Mask 대조군 `1.02 ~ 1.03×`)
+- **`d = 1,024`, 같은 배치:** GPU의 FFN만 잰 값으로 **3.00× / 3.83× / 4.32×** (이 폭에서는 어텐션이 짧아 타일 계획 시간을 다 숨기지 못한다)
 
-- **인터랙티브 시각 쇼케이스 (`ROSTER_SHOWCASE` · KO/EN):** https://rhydcdc.github.io/Roster/showcase.html
-- **상세 아키텍처 시각화 (`ROSTER_VIZ`):** https://rhydcdc.github.io/Roster/
+검증 범위: 실험 모델은 Fashion-MNIST 4층 SwiGLU FFN(`d = 1,024`, 뉴런 4,096개)이다. `d = 4,096` 수치는 같은 출석부와 활성 비율을 대형 LLM 층 폭에 적용해 커널 속도를 잰 것이다.
+
+- **쇼케이스 (9장면 슬라이드 · KO/EN):** https://rhydcdc.github.io/Roster/showcase.html
+- **직관 가이드 (탭 5개):** https://rhydcdc.github.io/Roster/
 - **E2E 실측 바로가기:** https://rhydcdc.github.io/Roster/#s04-4
 - **핵심 기여 바로가기:** https://rhydcdc.github.io/Roster/#05
+- **가이드 문서 원문 (한국어):** [`code/GUIDE/`](code/GUIDE/) (01 학습 · 02 단일 요청 · 03 배치 타일링 · 04 실행 · 05 새로운 점)
 - **재현 코드 안내:** [`code/README.md`](code/README.md)
 
 <details>
 <summary><b>Key Contributions (English)</b></summary>
 
-| # | Contribution | Core Mechanism | vs. Prior Work |
+Ordered from the most to the least novel.
+
+| Rank | Contribution | Where prior work stops | What is different here |
 | :---: | :--- | :--- | :--- |
-| **1** | **Layer-Differentiated Centroid Rosters (`M=[32,32,32,256]`)** | Single dot-product against finite layer centroids skips `gate · up · down` upfront with **0 learned routers** and overlapping variable-length rosters (`K_j`). Using `M=32` on L1–L3 naturally coalesces 16–64 tokens/centroid for dense `64×32` tiles, while `M=256` on L4 retains `0.80%` fine-grained sparsity. | *Deja Vu* / *ShadowLLM* (per-token MLP predictor, uncoalesced); *MoEfication* / *CMoE* (disjoint fixed experts) |
-| **2** | **Tile & Block-Friendly Shared Post-Training (`B1 + B2`)** | Combines OLO-balanced family ranking (`B1`, `α=0.35`) and 32-column block ranking + Group-L2 (`B2`, `β=0.25`, `tot_on` norm) so the model learns 32-col block sparsity natively: `×0` drops to **12.6%**, `P2` union to **16.1%**, DRAM reads to **64.5%**, and **90.81% (99.77%)** accuracy with **`1* = 0%`** (batch-invariant exact outputs). | Standard per-token or per-centroid pruning suffers high tile padding (`×0`), `W_down` union blowup, and batch-dependent drops |
-| **3** | **Non-Grid 5-Tier Tiling × Offline-Indexed `A3V4` AVX2 Dispatch** | Breaks fixed row-panel boundaries (*BSMR* / *Fused3S* / *TC-GNN*) via a measured-cost 5-tier ladder (`64×32 → 8×16`, `64×32` **76.7%**, fill **87.4%**). Offline indexing (`13.1 ms` once) cuts runtime 4-layer dispatch from 46s to **1.49–2.83 ms** (`0.00 ms` exposed behind Attention), matching offline exact `ms_solve` within `0.22%p`. | *MatFormer* (static global prefix); *BSMR* / *PIT* / *TileSpMM* (fixed row panels or single-scale kernels without sub-3ms dynamic dispatch) |
-| **4** | **Unified Single & Large-Batch End-to-End Silicon Proof** | Verified end-to-end in pure `bf16` on RTX 4060 (CPU `A3V4` + pinned H2D + `v4` 4-CTA Tensor Core kernels + `autoTM` `P2Fast` + CUDA Graph + 10k cascading test): `B = 1` **6.20–6.27×**, `B = 512–2,048` (`d = 4,096`) **3.08–4.57×** overlapped E2E (**1.66–3.10×** zero-overlap serial E2E). | *PowerInfer* / *TurboSparse* / *CATS* (`B = 1` / small-batch focus); *Polar Sparsity* / *Park et al.* (large-batch SwiGLU FFN collapse) |
+| **1** | **Real-time non-grid 5-tier tiling** | Recent Tensor Core SDDMM kernels (*BSMR*, *Fused3S*, *TC-GNN*) are bound to fixed row panels: a token cannot change its row partners, and they use a single tile size. Park et al. (2026-05) name token/neuron block grouping as future work. | Every tile re-pairs rows and columns freely, on a measured-cost ladder of five tile sizes (`64×32` carries 76.7% of the work). A table prepared once at model load (13.1 ms) plus a 1.49–2.83 ms per-batch plan that hides behind attention (0.000 ms exposed). On the same table it removes 60.9% more wasted `×0` cells than an upper-bound 5-tier BSMR. |
+| **2** | **Reversed paradigm: fix the rosters first, then train the model to fit** | *Deja Vu* and *ShadowLLM* predict, after the fact, which of 2<sup>4096</sup> patterns the model fires, and collapse in large batches. *MoEfication* and *CMoE* split neurons into disjoint experts, so partly shared neurons cannot be shared. *AWC* defines no selection rule and no post-training. | No learned router: one dot product against a finite set of centroids (`M = [32, 32, 32, 256]`) selects an overlapping, variable-length roster before the layer runs. Family- and 32-column-block-aware post-training makes the model fit those rosters while keeping 99.77% of the base accuracy (90.81%), with `1* = 0%`. |
+| **3** | **Per-token sparsity kept in large-batch SwiGLU FFN, measured end to end** | *PowerInfer* and *TurboSparse* target `B = 1`. *Polar Sparsity* gives up on large-batch SwiGLU FFN because the batch union fills up to 100%. Park et al. fall back to dense at large batch. *CMoE* reports 1.17× with coarse experts. | Per-token neuron sets are kept, not merged into a batch union. In pure `bf16`, one model is measured at `B = 1` (6.20–6.27×) and at `B = 512–2,048` (3.08–4.57× with attention overlap), across the densities of all four layers (0.8–22%). |
 
 </details>
 
 <details>
-<summary><b>핵심 기여 4축 (한국어)</b></summary>
+<summary><b>핵심 기여 3축 (한국어)</b></summary>
 
-| # | 핵심 기여 | 핵심 원리 | 선행 연구 대비 차별점 |
-| :---: | :--- | :--- | :--- |
-| **1** | **학습 라우터 없는 층별 차등 중심점 명단 (`M=[32,32,32,256]`)** | 단순 중심점 내적 1회로 `gate · up · down` 3행렬을 선제 스킵하며 공용 뉴런을 자유롭게 공유. 앞 1~3층은 `M=32`로 대형 배치에서 중심점당 <b>16~64토큰</b>이 자연 결집해 `64×32` 뼈대를 만들고, 출력 직전 4층은 `M=256`으로 <b>0.80%</b> 정밀 분기를 유지. | *Deja Vu*·*ShadowLLM*(토큰별 예측 → 겹침 붕괴), *MoEfication*·*CMoE*(겹침 없는 고정 전문가)와 구별 |
-| **2** | **타일·블록 친화적 공유 사후 학습 (`B1 + B2`)** | OLO 균형 가족 몰기(`B1`, `α=0.35`)와 32열 블록 몰기 + Group-L2(`B2`, `β=0.25`, `tot_on` 정규화)로 모델이 32열 블록 단위로 뭉쳐 희소해지도록 학습: `×0` <b>12.6%</b> · `P2` 합집합 <b>16.1%</b> · DRAM 읽기 <b>64.5%</b> · **`1* = 0%`** 배치 무관 동일 출력(<b>90.81%</b>, 베이스의 <b>99.77%</b>). | 개별 몰기(`M=256`) 대비 동일 커널 위 순수 <b>+47~70%</b> 추가 가속과 정확도 동시 향상 |
-| **3** | **비격자 5단계 타일링 × 오프라인-인덱스 `A3V4` AVX2 디스패치** | 고정 행 패널 경계를 깬 비격자 5단계 비용 사다리(`64×32` 단독 <b>76.7%</b>, 채움 <b>87.4%</b>). 오프라인 인덱스 1회(`13.1 ms`)로 런타임 4층 계획을 46초 → <b>1.49~2.83 ms</b>(16,000배 단축, 어텐션 뒤 노출 `0.00 ms`)로 끝내며, 10회 `BSMR` 5단계 행 패널 상한 대비 `×0` <b>-54.7%</b> 우위. | *MatFormer*(전역 정적), *BSMR*·*Fused3S*·*TC-GNN*(고정 행 패널), *PIT*/*TileSpMM*(실시간 디스패치 미포함) 돌파 |
-| **4** | **단일 요청 & 대형 서버 E2E 실측 검증 (순수 `bf16`)** | CPU `A3V4` · H2D · `v4` 4-CTA 텐서 코어 커널 · `autoTM` `P2Fast` · CUDA Graph · 10,000장 연쇄 시험까지 동일 RTX 4060에서 전수 검증: 단일 `B=1` <b>6.20~6.27×</b>, 대형 서버(`d=4,096`) 어텐션 중첩 E2E <b>3.08~4.57×</b> · 직렬 E2E <b>1.66~3.10×</b>. | *PowerInfer*·*TurboSparse*·*CATS*(`B=1` 중심), *Polar Sparsity*·*Park 등*(대형 배치 SwiGLU FFN 붕괴) 한계 돌파 |
+새로움이 강한 순서다 (1 → 2 → 3).
+
+| 순위 | 핵심 기여 축 | 기존 학계가 막힌 지점 | 우리 해법의 핵심 차별점 |
+|:---:|---|---|---|
+| **1순위** | **실시간 비격자 5단계 타일링** *(+ 필요 시 `1*` 버퍼 일반 메커니즘)* | 최신 SDDMM(`BSMR · Fused3S · TC-GNN`)은 **고정 행 패널 경계**에 묶여 행 짝을 못 바꾸고 단일 틀·고정 `1`에 머묾. Park 등(2026-05)도 "토큰·뉴런 블록 그룹핑"을 향후 과제로만 남김 | 행 패널 경계를 깨고 **타일마다 행·열을 자유 재조합** + 5단계 실측 비용 사다리(`64×32` `76.7%`) + `13.1 ms` 사전 준비 표 & `1.49 ~ 2.83 ms` 실시간 타일링(어텐션 노출 `0.000 ms`). 똑같은 표에서도 `BSMR` 5단계 상한 대비 **`×0`을 `-60.9%`** 추가 절감 |
+| **2순위** | **패러다임 역전: “예측기 추종 → 선제 유한 차등 명단 × 하드웨어 친화 공유 사후학습”** | *Deja Vu · ShadowLLM*은 모델의 2<sup>4096</sup>가지 산발 패턴을 **예측기가 뒤따라 맞히다** 대형 배치에서 붕괴. *MoEfication · CMoE*는 고정 방 분할로 부분 공용 뉴런 공유 불가. *AWC*는 고르는 법·사후학습 부재 | **출발점을 역전:** 학습 라우터 없이 단순 내적 1회로 **고정 차등 중심점(`M=[32,32,32,256]`) · 중복 허용 가변 `K` 명단**을 먼저 확정하고, **가족·32열 블록 압력 사후학습**으로 모델이 규칙에 맞춰 정확도(베이스 대비 `99.77%`(`90.81%`), `1* = 0%`)를 유지. 1순위 타일링·사전 준비 표와 4중 맞물림 |
+| **3순위** | **대형 배치 SwiGLU FFN 토큰별 희소성 유지 (단일 · 서버 E2E 동시 실측)** | *PowerInfer · TurboSparse*는 `B = 1` 중심, *Polar Sparsity*는 합집합이 `100%`로 꽉 차는 문제로 SwiGLU 대형 배치 FFN을 포기(어텐션 우회), *Park 등*은 큰 배치에서 밀집 복귀, *CMoE*는 굵은 전문가 `1.17×` | 합집합으로 뭉개지 않고 **토큰별 뉴런 집합을 유지한 채** 순수 `bf16`으로 단일(`6.20 ~ 6.27×`)과 대형 서버(`3.08 ~ 4.57×` 중첩)를 동시 실측 + 4개 층 전 밀도 구간(`0.8 ~ 22%`) 밀도 무관 가속 |
 
 </details>

@@ -9,3 +9,7 @@
 __pycache__/
 *.pyc
 code/RECIPE_VIZ.html
+# 페이지를 다시 만들 때 code/ 아래에 생기는 사본과 검사 산출물 (공개 페이지는 루트의 index.html, showcase.html)
+code/ROSTER_VIZ.html
+code/ROSTER_SHOWCASE.html
+code/VIZ/src_v3/out/
