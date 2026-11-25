@@ -9,8 +9,8 @@ RTX 4060 3라운드 교대 CUDA Graph 4층 합계 실측 기준:
 
 - **인터랙티브 시각 쇼케이스 (`ROSTER_SHOWCASE` · KO/EN):** https://rhydcdc.github.io/Roster/showcase.html
 - **상세 아키텍처 시각화 (`ROSTER_VIZ`):** https://rhydcdc.github.io/Roster/
-- **묶어서 계산 · E2E 실측 바로가기:** https://rhydcdc.github.io/Roster/#batch
-- **핵심 기여 4축 바로가기:** https://rhydcdc.github.io/Roster/#contrib
+- **E2E 실측 바로가기:** https://rhydcdc.github.io/Roster/#s04-4
+- **핵심 기여 바로가기:** https://rhydcdc.github.io/Roster/#05
 - **재현 코드 안내:** [`code/README.md`](code/README.md)
 
 <details>
